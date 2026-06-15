@@ -480,8 +480,10 @@ function bindRoom() {
   document.querySelector("[data-action='refresh-history']").addEventListener("click", loadConversations);
   document.querySelector("[data-action='clear-history']").addEventListener("click", clearHistory);
   document.querySelector("[data-action='refresh-recordings']").addEventListener("click", loadRecordings);
-  document.querySelector("[data-action='render-play']")?.addEventListener("click", toggleRenderPlayback);
-  document.querySelector("[data-action='render-fit']")?.addEventListener("click", () => {
+  const renderPlayButton = document.querySelector("[data-action='render-play']");
+  if (renderPlayButton) renderPlayButton.addEventListener("click", toggleRenderPlayback);
+  const renderFitButton = document.querySelector("[data-action='render-fit']");
+  if (renderFitButton) renderFitButton.addEventListener("click", () => {
     fitAvatarRenderCamera();
     scheduleRenderPreview(0, "idle");
   });
@@ -681,11 +683,11 @@ async function loadAvatarPointCloud(url) {
   geometry.computeBoundingBox();
   geometry.computeBoundingSphere();
   const center = new THREE.Vector3();
-  geometry.boundingBox?.getCenter(center);
+  if (geometry.boundingBox) geometry.boundingBox.getCenter(center);
   avatarViewerState.centerOffset = [center.x, center.y, center.z];
   geometry.center();
   geometry.computeBoundingSphere();
-  const radius = geometry.boundingSphere?.radius || 1;
+  const radius = (geometry.boundingSphere && geometry.boundingSphere.radius) || 1;
   const material = new THREE.PointsMaterial({
     color: 0xf1f5f2,
     vertexColors: geometry.hasAttribute("color"),
@@ -729,7 +731,7 @@ function fitAvatarRenderCamera() {
   if (!object || !avatarViewerState.camera || !avatarViewerState.controls) return;
   object.geometry.computeBoundingSphere();
   const sphere = object.geometry.boundingSphere;
-  const radius = Math.max(sphere?.radius || 1, 0.01);
+  const radius = Math.max((sphere && sphere.radius) || 1, 0.01);
   const distance = Math.max(radius * 2.6, 0.8);
   avatarViewerState.defaultCameraDistance = distance;
   avatarViewerState.camera.position.set(0, radius * 0.12, distance);
@@ -744,7 +746,7 @@ function startAvatarRenderLoop() {
   if (!avatarViewerState.renderer || avatarViewerState.animationId) return;
   const tick = () => {
     avatarViewerState.animationId = requestAnimationFrame(tick);
-    avatarViewerState.controls?.update();
+    if (avatarViewerState.controls) avatarViewerState.controls.update();
     updateRenderTimeline();
     avatarViewerState.renderer.render(avatarViewerState.scene, avatarViewerState.camera);
   };
@@ -765,9 +767,9 @@ function resizeAvatarRender() {
 function toggleRenderPlayback() {
   const audio = document.querySelector("#avatarRenderAudio");
   const video = document.querySelector("#avatarVideo");
-  if (!audio?.src) return;
+  if (!audio || !audio.src) return;
   if (audio.paused) {
-    video?.pause();
+    if (video) video.pause();
     audio.play().catch(() => {});
   } else {
     audio.pause();
@@ -831,9 +833,9 @@ function stopRenderPreviewLoop() {
 
 function getRenderPreviewDimensions(reason = "idle") {
   const stage = document.querySelector("#avatarRenderStage");
-  const rect = stage?.getBoundingClientRect();
-  const baseWidth = Math.max(320, Math.floor(rect?.width || 640));
-  const baseHeight = Math.max(320, Math.floor(rect?.height || 640));
+  const rect = stage ? stage.getBoundingClientRect() : null;
+  const baseWidth = Math.max(320, Math.floor((rect && rect.width) || 640));
+  const baseHeight = Math.max(320, Math.floor((rect && rect.height) || 640));
   const scale = reason === "drag" ? 0.72 : reason === "playback" ? 0.82 : 1;
   return {
     width: Math.max(256, Math.min(960, Math.round(baseWidth * scale))),
@@ -925,7 +927,8 @@ async function requestRenderedFrame(reason = "idle") {
       body: JSON.stringify({ camera, frame, width, height }),
     });
     if (!response.ok) throw new Error(await response.text());
-    const frameHeader = Number(response.headers.get("X-Frame") ?? frame);
+    const frameValue = response.headers.get("X-Frame");
+    const frameHeader = Number(frameValue === null ? frame : frameValue);
     const imageBlob = await response.blob();
     const nextSrc = URL.createObjectURL(imageBlob);
     await preloadImage(nextSrc);
@@ -1209,7 +1212,8 @@ async function applyAvatarResult(response) {
     }
   });
   if (avatarAudioUrl) {
-    document.querySelector("#avatarAudio")?.play().catch(() => {});
+    const avatarAudio = document.querySelector("#avatarAudio");
+    if (avatarAudio) avatarAudio.play().catch(() => {});
   }
   setTimeout(() => stopGenerationProgress("Ready", 0), 1200);
 }
@@ -1714,11 +1718,13 @@ function bindDigitalHumansAdmin() {
   document.querySelectorAll("[data-human-save]").forEach((button) => {
     button.addEventListener("click", async () => {
       const avatarId = button.dataset.humanSave;
-      const name = document.querySelector(`[data-human-name="${cssEscape(avatarId)}"]`)?.value.trim() || "";
-      const role = document.querySelector(`[data-human-role="${cssEscape(avatarId)}"]`)?.value.trim() || "";
+      const nameInput = document.querySelector(`[data-human-name="${cssEscape(avatarId)}"]`);
+      const roleInput = document.querySelector(`[data-human-role="${cssEscape(avatarId)}"]`);
+      const name = nameInput ? nameInput.value.trim() : "";
+      const role = roleInput ? roleInput.value.trim() : "";
       const speaker = document.querySelector(`[data-human-speaker="${cssEscape(avatarId)}"]`);
       const image = document.querySelector(`[data-human-image="${cssEscape(avatarId)}"]`);
-      const ttsSpeakerId = speaker?.value || "6224";
+      const ttsSpeakerId = (speaker && speaker.value) || "6224";
       button.disabled = true;
       button.textContent = "Saving...";
       try {
@@ -1726,7 +1732,7 @@ function bindDigitalHumansAdmin() {
           method: "PATCH",
           body: JSON.stringify({ name, role, ttsSpeakerId })
         });
-        if (image?.files?.[0]) {
+        if (image && image.files && image.files[0]) {
           const form = new FormData();
           form.append("image", image.files[0], image.files[0].name);
           const response = await fetch(`/api/digital_humans/${encodeURIComponent(avatarId)}/image`, {
@@ -1760,15 +1766,15 @@ function formatDate(value) {
 
 function escapeHtml(value) {
   return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 function cssEscape(value) {
-  if (window.CSS?.escape) return window.CSS.escape(String(value));
+  if (window.CSS && window.CSS.escape) return window.CSS.escape(String(value));
   return String(value).replace(/["\\]/g, "\\$&");
 }
 
