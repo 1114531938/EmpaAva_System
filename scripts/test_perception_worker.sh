@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="${AVATAR_SYSTEM_ROOT:-/scratch/e1554543/avatar_system_full}"
 URL="${PERCEPTION_WORKER_URL:-http://127.0.0.1:8791}"
 WAV="${1:-$ROOT/perception_layer/data/demo_wavs/sample_dialog_02.wav}"
-OUT_DIR="${2:-$ROOT/outputs/perception_worker_smoke}"
+OUT_DIR="${2:-$ROOT/runtime/outputs/perception_worker_smoke}"
 
 mkdir -p "$OUT_DIR/perception" "$OUT_DIR/task1"
 

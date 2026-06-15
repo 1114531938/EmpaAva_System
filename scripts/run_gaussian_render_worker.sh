@@ -12,9 +12,9 @@ export NUMEXPR_NUM_THREADS="${NUMEXPR_NUM_THREADS:-1}"
 export TOKENIZERS_PARALLELISM="${TOKENIZERS_PARALLELISM:-false}"
 
 cmd="
-export PYTHONPATH='$ROOT/GSavatar_runs/GaussianAvatars:$ROOT/tools/avatar_agent':\$PYTHONPATH
-cd '$ROOT/GSavatar_runs/GaussianAvatars'
-'$ROOT/GSavatar_runs/GaussianAvatars/.GSavatar_glibc/bin/python' gaussian_render_worker.py \
+export PYTHONPATH='$ROOT/integrations/gaussian_avatar:$ROOT/src:$ROOT/tools/avatar_agent':\$PYTHONPATH
+cd '$ROOT/integrations/gaussian_avatar'
+'$ROOT/integrations/gaussian_avatar/.GSavatar_glibc/bin/python' gaussian_render_worker.py \
   --host '$HOST' \
   --port '$PORT'
 "
@@ -23,5 +23,5 @@ APPTAINER_FLAGS="${APPTAINER_FLAGS:---nv}"
 
 exec apptainer exec $APPTAINER_FLAGS \
   -B /scratch:/scratch,/home/svu:/home/svu \
-  "$ROOT/containers/gaussianav_jammy" \
+  "$ROOT/runtime/containers/gaussianav_jammy" \
   bash -lc "$cmd"

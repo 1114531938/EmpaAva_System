@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="${AVATAR_SYSTEM_ROOT:-/scratch/e1554543/avatar_system_full}"
 VHAP_RUNS_ROOT="${VHAP_RUNS_ROOT:-$ROOT/VHAP_runs}"
-VHAP_REPO="${VHAP_REPO:-$VHAP_RUNS_ROOT/repo}"
+VHAP_REPO="${VHAP_REPO:-$ROOT/integrations/vhap}"
 VHAP_ENV_NAME="${VHAP_ENV_NAME:-.vhap121}"
 VHAP_ENV_ROOT="${VHAP_ENV_ROOT:-$VHAP_RUNS_ROOT/$VHAP_ENV_NAME}"
 VHAP_PYTHON="${VHAP_PYTHON:-$VHAP_ENV_ROOT/bin/python}"
@@ -41,11 +41,11 @@ detect_cuda_home() {
   return 1
 }
 
-export HF_HOME="${HF_HOME:-$ROOT/cache/hf}"
-export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$ROOT/cache/xdg}"
-export MODELSCOPE_CACHE="${MODELSCOPE_CACHE:-$ROOT/cache/modelscope}"
-export NLTK_DATA="${NLTK_DATA:-$ROOT/cache/nltk_data}"
-export PIP_CACHE_DIR="${PIP_CACHE_DIR:-$ROOT/cache/pip}"
+export HF_HOME="${HF_HOME:-$ROOT/runtime/cache/hf}"
+export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$ROOT/runtime/cache/xdg}"
+export MODELSCOPE_CACHE="${MODELSCOPE_CACHE:-$ROOT/runtime/cache/modelscope}"
+export NLTK_DATA="${NLTK_DATA:-$ROOT/runtime/cache/nltk_data}"
+export PIP_CACHE_DIR="${PIP_CACHE_DIR:-$ROOT/runtime/cache/pip}"
 export PYTHONPATH="$VHAP_REPO:${PYTHONPATH:-}"
 export PATH="$VHAP_ENV_ROOT/bin:$ROOT/tools/ffmpeg-git-20240629-amd64-static:${PATH}"
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"

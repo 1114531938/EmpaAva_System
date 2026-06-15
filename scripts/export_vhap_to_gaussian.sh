@@ -23,7 +23,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-SUBJECT_ROOT="$ROOT/data/subjects/$SUBJECT_ID"
+SUBJECT_ROOT="$ROOT/runtime/data/subjects/$SUBJECT_ID"
 SRC_FOLDER="${SRC_FOLDER:-$SUBJECT_ROOT/vhap/tracking}"
 TGT_FOLDER="${TGT_FOLDER:-$SUBJECT_ROOT/gaussian_source}"
 

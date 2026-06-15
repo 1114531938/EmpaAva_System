@@ -2,10 +2,10 @@
 set -euo pipefail
 
 ROOT="${AVATAR_SYSTEM_ROOT:-/scratch/e1554543/avatar_system_full}"
-GAUSS_ROOT="$ROOT/GSavatar_runs/GaussianAvatars"
+GAUSS_ROOT="$ROOT/integrations/gaussian_avatar"
 GAUSS_PY="$GAUSS_ROOT/.GSavatar_glibc/bin/python"
-EXPORTER="$ROOT/tools/avatar_agent/export_gaussian_video.py"
-CONTAINER="$ROOT/containers/gaussianav_jammy"
+EXPORTER="$ROOT/src/avatar_system/export_gaussian_video.py"
+CONTAINER="$ROOT/runtime/containers/gaussianav_jammy"
 FFMPEG="$ROOT/tools/ffmpeg-git-20240629-amd64-static/ffmpeg"
 
 if [[ $# -lt 4 ]]; then

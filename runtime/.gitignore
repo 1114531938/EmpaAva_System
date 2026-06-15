@@ -1,0 +1,8 @@
+# Runtime data stays local.
+cache/
+containers/
+data/
+outputs/
+emotivoice/input/
+
+!.gitignore

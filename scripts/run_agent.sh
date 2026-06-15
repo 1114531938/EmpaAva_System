@@ -15,10 +15,10 @@ if [[ $# -gt 0 && "$1" != --* ]]; then
   shift
 fi
 
-export HF_HOME="${HF_HOME:-$ROOT/cache/hf}"
-export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$ROOT/cache/xdg}"
-export MODELSCOPE_CACHE="${MODELSCOPE_CACHE:-$ROOT/cache/modelscope}"
-export NLTK_DATA="${NLTK_DATA:-$ROOT/cache/nltk_data}"
+export HF_HOME="${HF_HOME:-$ROOT/runtime/cache/hf}"
+export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$ROOT/runtime/cache/xdg}"
+export MODELSCOPE_CACHE="${MODELSCOPE_CACHE:-$ROOT/runtime/cache/modelscope}"
+export NLTK_DATA="${NLTK_DATA:-$ROOT/runtime/cache/nltk_data}"
 
 mkdir -p "$HF_HOME" "$XDG_CACHE_HOME" "$MODELSCOPE_CACHE" "$NLTK_DATA"
 
@@ -45,9 +45,11 @@ if missing:
     raise SystemExit(1)
 PY
 
-cd "$ROOT/tools/avatar_agent"
-"$AGENT_PYTHON" run_avatar_agent.py \
+export PYTHONPATH="$ROOT/src:$ROOT/tools/avatar_agent:${PYTHONPATH:-}"
+
+cd "$ROOT"
+"$AGENT_PYTHON" -m avatar_system.pipeline.cli \
   --input_wav "$INPUT_WAV" \
   --avatar_id "$AVATAR_ID" \
-  --config "$ROOT/tools/avatar_agent/pipeline_config.yaml" \
+  --config "$ROOT/src/avatar_system/pipeline_config.yaml" \
   "$@"

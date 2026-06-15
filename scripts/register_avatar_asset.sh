@@ -27,8 +27,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-SUBJECT_ROOT="$ROOT/data/subjects/$SUBJECT_ID"
-ASSET_ROOT="$ROOT/GSavatar_runs/GaussianAvatars/media/$AVATAR_ID"
+SUBJECT_ROOT="$ROOT/runtime/data/subjects/$SUBJECT_ID"
+ASSET_ROOT="$ROOT/integrations/gaussian_avatar/media/$AVATAR_ID"
 MODEL_PATH="${MODEL_PATH:-$SUBJECT_ROOT/gaussian_train}"
 
 if [[ -z "$POINT_PATH" ]]; then
@@ -63,14 +63,14 @@ else
 fi
 
 CMD=(
-  python "$ROOT/tools/avatar_agent/tools/build_template_from_vhap.py"
+  python -m avatar_system.tools.build_template_from_vhap
   --canonical "$CANONICAL_PATH"
   --out "$ASSET_ROOT/flame_param.npz"
 )
 if [[ -n "$TRACKED_PATH" ]]; then
   CMD+=(--tracked "$TRACKED_PATH")
 fi
-"${CMD[@]}"
+PYTHONPATH="$ROOT/src:${PYTHONPATH:-}" "${CMD[@]}"
 
 echo "[register_avatar_asset] registered asset:"
 echo "  avatar_id:    $AVATAR_ID"

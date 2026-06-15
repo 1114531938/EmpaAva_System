@@ -7,9 +7,9 @@ PORT="${PERCEPTION_WORKER_PORT:-8791}"
 MODEL="${PERCEPTION_WORKER_MODEL:-small}"
 SER_MODEL="${PERCEPTION_WORKER_SER_MODEL:-iic/emotion2vec_plus_seed}"
 
-export HF_HOME="${HF_HOME:-$ROOT/cache/hf}"
-export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$ROOT/cache/xdg}"
-export MODELSCOPE_CACHE="${MODELSCOPE_CACHE:-$ROOT/cache/modelscope}"
+export HF_HOME="${HF_HOME:-$ROOT/runtime/cache/hf}"
+export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$ROOT/runtime/cache/xdg}"
+export MODELSCOPE_CACHE="${MODELSCOPE_CACHE:-$ROOT/runtime/cache/modelscope}"
 export TOKENIZERS_PARALLELISM="${TOKENIZERS_PARALLELISM:-false}"
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
 export OPENBLAS_NUM_THREADS="${OPENBLAS_NUM_THREADS:-1}"
@@ -31,5 +31,5 @@ APPTAINER_FLAGS="${APPTAINER_FLAGS:---nv}"
 
 exec apptainer exec $APPTAINER_FLAGS \
   -B /scratch:/scratch,/home/svu:/home/svu \
-  "$ROOT/containers/gaussianav_jammy" \
+  "$ROOT/runtime/containers/gaussianav_jammy" \
   bash -lc "$cmd"

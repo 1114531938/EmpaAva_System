@@ -6,22 +6,23 @@ training data, generated media, Python environments, caches, or containers.
 
 ## Included
 
-- End-to-end pipeline orchestration under `tools/avatar_agent/`
-- Service and asset-building scripts under `scripts/`
-- FastAPI web application and browser frontend under `web_app/`
+- Three-agent pipeline package under `src/avatar_system/`
+- FastAPI web application and browser frontend under `apps/web/`
+- Booth / 3DEPB frontend under `apps/booth/`
+- Service, worker, and asset-building scripts under `scripts/`
 - Perception integration code under `perception_layer/scripts/`
-- Local integration changes and workers for AvaMERG, EmotiVoice, DEEPTalk,
-  GaussianAvatars, and VHAP
+- Local integration changes and workers under `integrations/`
+- Compatibility shims under `tools/avatar_agent/` and `web_app/`
 
 ## Excluded Assets
 
 The following categories remain local and are ignored by Git:
 
 - Model weights and checkpoints: `*.pth`, `*.pt`, `*.ckpt`, `*.safetensors`
-- Trained avatars and motion assets: `*.ply`, `*.npz`, `data/`, `media/`
+- Trained avatars and motion assets: `*.ply`, `*.npz`, `media/`, datasets
 - NeRSemble and other downloaded datasets
-- Virtual environments, Apptainer containers and model caches
-- Runtime outputs, uploaded audio and exported videos
+- Virtual environments, Apptainer containers, and model caches
+- Runtime outputs, uploaded audio, exported videos, and service logs
 - Downloaded `ffmpeg` binaries and large upstream vendor/submodule trees
 
 These files are either too large for a normal GitHub repository, generated at
@@ -29,12 +30,19 @@ runtime, or subject to their upstream dataset/model licenses.
 
 ## Local Runtime Layout
 
-The runnable local deployment expects the excluded assets to be restored at
-the same workspace-relative locations described in `README.md` and
-`avatar_head_build_guide.md`. In particular, an available avatar must contain:
+Local runtime state belongs under:
 
 ```text
-GSavatar_runs/GaussianAvatars/media/<avatar_id>/
+runtime/cache/
+runtime/containers/
+runtime/data/
+runtime/outputs/
+```
+
+An available avatar normally provides:
+
+```text
+integrations/gaussian_avatar/media/<avatar_id>/
 |-- point_cloud.ply
 `-- flame_param.npz
 ```

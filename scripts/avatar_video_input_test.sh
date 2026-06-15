@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="${AVATAR_SYSTEM_ROOT:-/scratch/e1554543/avatar_system_full}"
 HOST="${HOST:-0.0.0.0}"
 PORT="${PORT:-7861}"
-RUN_DIR="$ROOT/outputs/service_logs"
+RUN_DIR="$ROOT/runtime/outputs/service_logs"
 PID_FILE="$RUN_DIR/video_input_web.pid"
 LOG_FILE="$RUN_DIR/video_input_web.log"
 URL="http://127.0.0.1:${PORT}/booth"

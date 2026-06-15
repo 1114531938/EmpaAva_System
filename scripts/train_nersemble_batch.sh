@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="${AVATAR_SYSTEM_ROOT:-/scratch/e1554543/avatar_system_full}"
-INVENTORY="$ROOT/GSavatar_runs/GaussianAvatars/datasets/nersemble_preprocessed/nersemble_subjects.tsv"
+INVENTORY="$ROOT/integrations/gaussian_avatar/datasets/nersemble_preprocessed/nersemble_subjects.tsv"
 FAST_30K=0
 LIMIT=""
 SUBJECTS=""
@@ -46,7 +46,7 @@ for subject_id, source_dir in rows:
     print(f"{subject_id}\t{source_dir}")
 PY
   echo "[train_nersemble_batch] subject=$subject_id source=$source_dir"
-  mkdir -p "$ROOT/data/subjects/$subject_id"
+  mkdir -p "$ROOT/runtime/data/subjects/$subject_id"
   CMD=(bash "$ROOT/scripts/train_gaussian_subject.sh" "$subject_id" --source "$source_dir")
   if [[ "$FAST_30K" == "1" ]]; then
     CMD+=(--fast-30k)

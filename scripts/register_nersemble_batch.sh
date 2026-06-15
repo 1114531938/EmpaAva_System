@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="${AVATAR_SYSTEM_ROOT:-/scratch/e1554543/avatar_system_full}"
-INVENTORY="$ROOT/GSavatar_runs/GaussianAvatars/datasets/nersemble_preprocessed/nersemble_subjects.tsv"
+INVENTORY="$ROOT/integrations/gaussian_avatar/datasets/nersemble_preprocessed/nersemble_subjects.tsv"
 BASE_AVATAR_ID=2001
 MODEL_SUFFIX="gaussian_train"
 LIMIT=""
@@ -48,7 +48,7 @@ with open(inventory, "r", encoding="utf-8") as f:
 for avatar_id, subject_id, source_dir in rows:
     print(f"{avatar_id}\t{subject_id}\t{source_dir}")
 PY
-  MODEL_PATH="$ROOT/data/subjects/$subject_id/$MODEL_SUFFIX"
+  MODEL_PATH="$ROOT/runtime/data/subjects/$subject_id/$MODEL_SUFFIX"
   echo "[register_nersemble_batch] avatar_id=$avatar_id subject=$subject_id model=$MODEL_PATH"
   CMD=(
     bash "$ROOT/scripts/register_avatar_asset.sh" "$subject_id" "$avatar_id"

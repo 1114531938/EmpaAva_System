@@ -33,7 +33,8 @@ Current behavior:
 - `avatar_booth_service.sh` reuses `avatar_service.sh` for worker lifecycle.
 - It changes the web port to `7862`.
 - It uses `scripts/run_3depb.sh` as the web start script.
-- `run_3depb.sh` expects `3DEPB_runs/3DEPB/server.py` to exist.
+- `run_3depb.sh` now defaults to `apps/booth/server.py`; the old
+  `3DEPB_runs/3DEPB` path is kept only as a compatibility symlink.
 
 If you want to serve the built-in Booth page from the FastAPI backend instead,
 use:

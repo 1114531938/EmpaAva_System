@@ -9,7 +9,7 @@ if [[ $# -lt 1 ]]; then
 fi
 
 SUBJECT_ID="$1"
-SUBJECT_ROOT="$ROOT/data/subjects/$SUBJECT_ID"
+SUBJECT_ROOT="$ROOT/runtime/data/subjects/$SUBJECT_ID"
 
 mkdir -p \
   "$SUBJECT_ROOT/raw" \

@@ -5,7 +5,7 @@ ROOT="${AVATAR_SYSTEM_ROOT:-/scratch/e1554543/avatar_system_full}"
 TTS_WORKER_HOST="${TTS_WORKER_HOST:-127.0.0.1}"
 TTS_WORKER_PORT="${TTS_WORKER_PORT:-8788}"
 TTS_WORKER_URL="http://${TTS_WORKER_HOST}:${TTS_WORKER_PORT}"
-LOG_DIR="$ROOT/outputs/service_logs"
+LOG_DIR="$ROOT/runtime/outputs/service_logs"
 TTS_LOG="$LOG_DIR/tts_worker.log"
 
 mkdir -p "$LOG_DIR"

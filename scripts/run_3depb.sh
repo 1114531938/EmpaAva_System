@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="${AVATAR_SYSTEM_ROOT:-/scratch/e1554543/avatar_system_full}"
 PORT="${PORT:-7862}"
-DEPB_ROOT="${DEPB_ROOT:-$ROOT/3DEPB_runs/3DEPB}"
+DEPB_ROOT="${DEPB_ROOT:-$ROOT/apps/booth}"
 DEPB_START_CMD="${DEPB_START_CMD:-}"
 export PORT
 

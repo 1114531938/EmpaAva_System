@@ -57,7 +57,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-SUBJECT_ROOT="$ROOT/data/subjects/$SUBJECT_ID"
+SUBJECT_ROOT="$ROOT/runtime/data/subjects/$SUBJECT_ID"
 RAW_ROOT="$SUBJECT_ROOT/raw"
 VHAP_ROOT="$SUBJECT_ROOT/vhap"
 TRACK_ROOT="$VHAP_ROOT/tracking"

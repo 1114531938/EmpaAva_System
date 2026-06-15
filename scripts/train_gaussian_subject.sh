@@ -32,7 +32,7 @@ if [[ "$FAST_30K" == "1" && "$QUALITY_200K" == "1" ]]; then
   exit 2
 fi
 
-SUBJECT_ROOT="$ROOT/data/subjects/$SUBJECT_ID"
+SUBJECT_ROOT="$ROOT/runtime/data/subjects/$SUBJECT_ID"
 SOURCE_PATH="${SOURCE_PATH:-$SUBJECT_ROOT/gaussian_source}"
 if [[ -z "$MODEL_PATH" ]]; then
   if [[ "$FAST_30K" == "1" ]]; then
@@ -43,7 +43,7 @@ if [[ -z "$MODEL_PATH" ]]; then
     MODEL_PATH="$SUBJECT_ROOT/gaussian_train"
   fi
 fi
-GAUSS_ROOT="$ROOT/GSavatar_runs/GaussianAvatars"
+GAUSS_ROOT="$ROOT/integrations/gaussian_avatar"
 GAUSS_PY="$GAUSS_ROOT/.GSavatar_glibc/bin/python"
 
 if [[ ! -x "$GAUSS_PY" ]]; then

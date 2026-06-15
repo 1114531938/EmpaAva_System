@@ -31,7 +31,7 @@ Most first-party scripts and the avatar agent also support:
 export AVATAR_SYSTEM_ROOT=/your/deploy/path/avatar_system_full
 ```
 
-`tools/avatar_agent/pipeline_config.yaml` uses `${PROJECT_ROOT}` placeholders
+`src/avatar_system/pipeline_config.yaml` uses `${PROJECT_ROOT}` placeholders
 that are expanded from `AVATAR_SYSTEM_ROOT` by the pipeline config loader.
 
 ## 3. Restore Local Assets
@@ -39,17 +39,17 @@ that are expanded from `AVATAR_SYSTEM_ROOT` by the pipeline config loader.
 Restore these from backup or rebuild them:
 
 ```text
-cache/
-containers/
-data/
-outputs/                         # optional historical outputs/logs
-GSavatar_runs/GaussianAvatars/media/
-GSavatar_runs/GaussianAvatars/datasets/
-AvaMERG_runs/AvaMERG-Pipeline/ckpt/
-EmotiVoice_runs/models/
-wav_to_flame/DEEPTalk_runs/repos/DEEPTalk/_downloads/
-VHAP_runs/repo/asset/
-3DEPB_runs/3DEPB/                # if the 7862 3DEPB service is needed
+runtime/cache/
+runtime/containers/
+runtime/data/
+runtime/outputs/                 # optional historical outputs/logs
+integrations/gaussian_avatar/media/
+integrations/gaussian_avatar/datasets/
+integrations/avamerg/ckpt/
+integrations/emotivoice/models/
+integrations/deeptalk/_downloads/
+integrations/vhap/asset/
+apps/booth/                      # if the 7862 3DEPB service is needed
 ```
 
 ## 4. Recreate Python Environments
@@ -58,11 +58,11 @@ The local working server currently uses component-specific environments, for
 example:
 
 ```text
-web_app/.web_venv/
+web_app/.web_venv/               # compatibility venv used by scripts/run_web.sh
 perception_layer/.perception/
-AvaMERG_runs/AvaMERG-Pipeline/.avamerg38/
-EmotiVoice_runs/repo/.EmotiVoice/
-GSavatar_runs/GaussianAvatars/.GSavatar/
+integrations/avamerg/.avamerg38/
+integrations/emotivoice/.EmotiVoice/
+integrations/gaussian_avatar/.GSavatar/
 wav_to_flame/DEEPTalk_runs/.deeptalk39/
 VHAP_runs/.vhap*/
 ```

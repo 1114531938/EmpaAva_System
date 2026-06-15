@@ -1,67 +1,59 @@
 # Project Structure
 
-This workspace keeps source code, local model repositories, runtime assets, and
-generated outputs in one runnable tree. Several scripts still use absolute paths,
-so the current cleanup is intentionally conservative: source and service entry
-points are documented clearly without moving runtime-heavy directories.
+The repository now follows an open-source style layout while keeping local
+runtime assets separate from source code.
 
 ## Top-Level Layout
 
 ```text
 avatar_system_full/
-|-- README.md                         # Main operating guide
-|-- SOURCE_RELEASE.md                 # What is included/excluded in GitHub
-|-- docs/                             # Architecture, ports, deployment notes
-|-- config/                           # Example environment files
-|-- scripts/                          # Start/stop/test/asset scripts
-|-- web_app/                          # FastAPI backend + browser frontend
-|-- tools/avatar_agent/               # End-to-end pipeline orchestrator
-|-- perception_layer/                 # ASR/SER/Task1 input integration
-|-- AvaMERG_runs/                     # AvaMERG local repo and worker
-|-- EmotiVoice_runs/                  # EmotiVoice local repo and TTS worker
-|-- wav_to_flame/                     # DEEPTalk and FLAME conversion helpers
-|-- GSavatar_runs/                    # GaussianAvatars local repo and renderer
-|-- VHAP_runs/                        # VHAP local repo and environment
-|-- 3DEPB_runs/                       # 3DEPB booth/demo service, if restored
-|-- data/                             # Local subject data, ignored by Git
-|-- cache/                            # HF/XDG/ModelScope/NLTK caches, ignored
-|-- containers/                       # Local Apptainer sandboxes, ignored
-`-- outputs/                          # Logs, uploads, exports, ignored
+|-- apps/
+|   |-- web/                         # FastAPI backend + 7861 frontend
+|   `-- booth/                       # 7862 Booth / 3DEPB frontend
+|-- src/avatar_system/
+|   |-- agents/                      # InputAgent, DialogueAgent, EmbodimentAgent
+|   |-- tools/                       # TTS/AvaMERG/DEEPTalk/Gaussian wrappers
+|   `-- pipeline/                    # CLI, orchestrator, state, config
+|-- integrations/
+|   |-- avamerg/
+|   |-- emotivoice/
+|   |-- deeptalk/
+|   |-- gaussian_avatar/
+|   `-- vhap/
+|-- perception_layer/                # ASR/SER integration
+|-- scripts/                         # Unified service and worker entrypoints
+|-- config/                          # Example runtime env files
+|-- docs/                            # Architecture and deployment notes
+|-- runtime/                         # Local cache/data/outputs/containers, ignored
+|-- tools/avatar_agent/              # Compatibility shims for old entrypoints
+`-- web_app/                         # Compatibility shim for apps.web.server
 ```
 
 ## Source Areas
 
-`web_app/`
-: Unified FastAPI application. It serves both frontend pages and API routes.
+`src/avatar_system/`
+: First-party Python package for the three-agent pipeline.
 
-`web_app/static/index.html`, `style_commercial.css`, `app.js`
-: Main research/studio UI. Default route on port `7861`.
+`apps/web/`
+: Unified FastAPI application and browser frontend. `web_app/server.py` remains
+as a compatibility import shim.
 
-`web_app/static/booth.html`, `booth.css`, `booth.js`
-: Booth/video-call UI. Served at `/booth`, or as `/` when
-`BOOTH_DEFAULT_ROUTE=1`.
+`apps/booth/`
+: 3DEPB / Booth service used by the 7862 entrypoint.
 
-`scripts/`
-: Shell entry points for services, workers, subject preparation, and tests.
-See `scripts/README.md`.
+`integrations/`
+: Local copies of upstream components with small worker/integration changes.
+Large weights, datasets, generated outputs, and nested upstream metadata remain
+ignored by Git.
 
-`tools/avatar_agent/`
-: Python orchestration layer that connects perception, AvaMERG, TTS,
-DEEPTalk/FLAME, Gaussian rendering, and artifact export.
+`runtime/`
+: Machine-local state: caches, containers, data workspaces, uploads, generated
+videos, manifests, service logs, and historical outputs.
 
-`perception_layer/scripts/`
-: Perception worker and helper scripts for ASR/SER and Task1 input JSON.
+## Compatibility Paths
 
-## Local Runtime Repositories
-
-The directories ending in `_runs` contain local copies of upstream projects plus
-small integration changes. They are part of the runnable local layout, but large
-weights, datasets, build products, and nested upstream vendor trees are ignored
-by Git. Keep these paths stable unless all scripts and config files are updated
-together.
-
-## Ignored Runtime Areas
-
-`cache/`, `containers/`, `data/`, and `outputs/` are machine-local. They should
-not be pushed to GitHub. Restore or recreate them separately when deploying to a
-new server.
+Older paths such as `tools/avatar_agent/`, `web_app/`, `AvaMERG_runs/`,
+`EmotiVoice_runs/`, `GSavatar_runs/`, `VHAP_runs/`, `wav_to_flame/`,
+`3DEPB_runs/`, `cache/`, `data/`, `containers/`, and `outputs/` are kept as
+thin shims or local symlinks during the migration. Do not add new source code to
+those locations.

@@ -20,24 +20,24 @@
 
 ## 2. 当前目录结构
 
-下面这些目录是现在主工程中真正使用的部分：
+当前源码已经整理成 `apps/ + src/avatar_system/ + integrations/ + runtime/`
+结构。旧路径作为兼容 shim 或本地软链接保留，避免现有脚本和环境失效。
 
 ```text
 /scratch/e1554543/avatar_system_full
 ├── README.md
-├── scripts/                         # 启动脚本、服务管理脚本、调试脚本
-├── web_app/                         # FastAPI + 前端页面
+├── apps/
+│   ├── web/                         # FastAPI + 7861 主前端
+│   └── booth/                       # 7862 Booth / 3DEPB 前端
+├── src/avatar_system/               # 三 Agent pipeline 核心代码
+├── integrations/                    # AvaMERG / EmotiVoice / DEEPTalk / Gaussian / VHAP
+├── runtime/                         # 本地缓存、数据、输出、容器，Git 忽略
+├── scripts/                         # 统一启动脚本、服务管理脚本、调试脚本
+├── config/                          # 环境变量示例
+├── docs/                            # 架构、端口、部署说明
 ├── perception_layer/                # 感知层
-├── AvaMERG_runs/                    # AvaMERG
-├── EmotiVoice_runs/                 # TTS
-├── wav_to_flame/                    # DEEPTalk / wav to FLAME
-├── GSavatar_runs/                   # GaussianAvatars
-├── VHAP_runs/                       # VHAP 仓库副本 + 环境入口
-├── data/                            # 新 subject 原始数据与中间资产
-├── tools/                           # avatar_agent、ffmpeg 等工具
-├── containers/                      # Apptainer writable sandbox
-├── cache/                           # HF / XDG / ModelScope / pipeline cache
-└── outputs/                         # 运行结果、网页结果、服务日志
+├── tools/avatar_agent/              # 旧 CLI 兼容入口
+└── web_app/                         # 旧 Web import 兼容入口
 ```
 
 更细的结构索引见：
@@ -45,15 +45,15 @@
 - `docs/PROJECT_STRUCTURE.md`
 - `docs/SERVICES_AND_PORTS.md`
 - `docs/AGENT_ARCHITECTURE.md`
-- `web_app/README.md`
+- `apps/web/README.md`
 - `scripts/README.md`
 
 ### 关键子目录
 
 ```text
-web_app/                             # Web server + static frontend
-web_app/static/                      # HTML / CSS / JS / vendor
-web_app/.web_venv/                   # Web 服务虚拟环境
+apps/web/                            # Web server + static frontend
+apps/web/static/                     # HTML / CSS / JS / vendor
+web_app/.web_venv/                   # 兼容保留的 Web 服务虚拟环境
 
 scripts/avatar_service.sh            # 一键管理 web + worker
 scripts/run_web.sh                   # 只启动 web
@@ -70,18 +70,19 @@ scripts/export_vhap_to_gaussian.sh   # 单独导出 Gaussian source
 scripts/train_gaussian_subject.sh    # 训练新的 Gaussian avatar
 scripts/register_avatar_asset.sh     # 注册 point_cloud/template 到 media/<id>
 
-tools/avatar_agent/                  # 命令行 orchestrator / export 工具
+src/avatar_system/                   # 命令行 orchestrator / export 工具
+tools/avatar_agent/                  # 旧入口 shim，转调 src/avatar_system
 tools/ffmpeg-git-20240629-amd64-static/
 
-GSavatar_runs/GaussianAvatars/media/306/
+integrations/gaussian_avatar/media/306/
                                     # avatar 306 相关 point_cloud / template 等
 
-VHAP_runs/                           # 项目内 VHAP 仓库 + Python 3.10 + venv
-data/subjects/<subject_id>/          # 新 subject 数据工作区
+integrations/vhap/                   # 项目内 VHAP 仓库
+runtime/data/subjects/<subject_id>/  # 新 subject 数据工作区
 
-outputs/service_logs/                # 服务日志和 pid 文件
-outputs/web_uploads/                 # 网页上传 wav
-outputs/web_<...>/                   # 网页每次运行结果
+runtime/outputs/service_logs/        # 服务日志和 pid 文件
+runtime/outputs/web_uploads/         # 网页上传 wav
+runtime/outputs/web_<...>/           # 网页每次运行结果
 ```
 
 ## 3. 当前运行方式
@@ -171,10 +172,10 @@ bash scripts/avatar_service.sh start
 
 后端关系：
 
-- `web_app/server.py` 是统一 FastAPI 后端，提供 `/api/*`、`/studio`、`/booth`。
+- `apps/web/server.py` 是统一 FastAPI 后端，提供 `/api/*`、`/studio`、`/booth`。
 - `scripts/run_web.sh` 默认把 `/` 指到主界面 `index.html`。
 - `scripts/run_booth.sh` 设置 `BOOTH_DEFAULT_ROUTE=1`，把 `/` 指到内置 Booth 页面。
-- `scripts/avatar_booth_service.sh` 当前默认走 `scripts/run_3depb.sh`，需要 `3DEPB_runs/3DEPB/server.py`。
+- `scripts/avatar_booth_service.sh` 当前默认走 `scripts/run_3depb.sh`，入口在 `apps/booth/server.py`。
 
 如果只想用内置 Booth 页面，不走外部 3DEPB，可以参考 `docs/SERVICES_AND_PORTS.md`。
 
@@ -242,7 +243,7 @@ http://localhost:7862
 该入口会复用同一套 worker 管理逻辑，并把服务日志写到：
 
 ```text
-outputs/service_logs/booth_web.log
+runtime/outputs/service_logs/booth_web.log
 ```
 
 ## 6. Web 页面功能
@@ -336,13 +337,13 @@ http://localhost:7861
 每次网页运行会生成一个目录：
 
 ```text
-/scratch/e1554543/avatar_system_full/outputs/web_<run_id>
+/scratch/e1554543/avatar_system_full/runtime/outputs/web_<run_id>
 ```
 
 常见结构：
 
 ```text
-outputs/web_<run_id>/
+runtime/outputs/web_<run_id>/
 ├── logs/
 ├── outputs/
 ├── artifacts/
@@ -353,7 +354,7 @@ outputs/web_<run_id>/
 常见产物在：
 
 ```text
-outputs/web_<run_id>/artifacts/
+runtime/outputs/web_<run_id>/artifacts/
 ```
 
 通常包括：
@@ -369,7 +370,7 @@ outputs/web_<run_id>/artifacts/
 
 当前 Web 端已经做了自动清理策略：
 
-- `outputs/` 下网页运行目录默认只保留最近 5 个
+- `runtime/outputs/` 下网页运行目录默认只保留最近 5 个
 - `service_logs` 和 `web_uploads` 不会被误删
 
 ## 9. 缓存目录
@@ -377,16 +378,16 @@ outputs/web_<run_id>/artifacts/
 当前运行统一使用项目内缓存：
 
 ```text
-/scratch/e1554543/avatar_system_full/cache
+/scratch/e1554543/avatar_system_full/runtime/cache
 ```
 
 其中常见子目录包括：
 
-- `cache/hf`
-- `cache/xdg`
-- `cache/modelscope`
-- `cache/nltk_data`
-- `cache/cache`（Apptainer / OCI / oras 相关缓存）
+- `runtime/cache/hf`
+- `runtime/cache/xdg`
+- `runtime/cache/modelscope`
+- `runtime/cache/nltk_data`
+- `runtime/cache/cache`（Apptainer / OCI / oras 相关缓存）
 
 如果需要整体迁移、备份或清理缓存，优先围绕这个目录处理。
 
@@ -438,9 +439,9 @@ ss -ltnp | grep 8792
 
 只改：
 
-- `web_app/static/index.html`
-- `web_app/static/style_commercial.css`
-- `web_app/static/app.js`
+- `apps/web/static/index.html`
+- `apps/web/static/style_commercial.css`
+- `apps/web/static/app.js`
 
 通常：
 
@@ -451,10 +452,10 @@ ss -ltnp | grep 8792
 
 改这些文件后建议重启：
 
-- `web_app/server.py`
+- `apps/web/server.py`
 - `scripts/*.sh`
-- `GSavatar_runs/GaussianAvatars/gaussian_render_worker.py`
-- `tools/avatar_agent/*.py`
+- `integrations/gaussian_avatar/gaussian_render_worker.py`
+- `src/avatar_system/*.py`
 
 执行：
 
