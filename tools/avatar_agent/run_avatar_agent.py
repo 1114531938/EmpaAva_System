@@ -8,14 +8,9 @@ from pathlib import Path
 
 import yaml
 
+from manifest_utils import save_json, write_manifest
 from state import PipelineState
 from orchestrator import Orchestrator
-
-
-def save_json(path: str, data: dict) -> None:
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
 
 
 def main():
@@ -91,8 +86,6 @@ def main():
     state.turn_id = args.turn_id
 
     state_path = os.path.join(run_dir, "state.json")
-    manifest_path = os.path.join(run_dir, "manifest.json")
-
     def save_state(s: PipelineState):
         save_json(state_path, s.to_dict())
 
@@ -101,45 +94,7 @@ def main():
     orchestrator = Orchestrator(config)
     final_state = orchestrator.run(state, save_state=save_state)
 
-    manifest = {
-        "run_id": final_state.run_id,
-        "input_wav": final_state.input_wav,
-        "avatar_id": final_state.avatar_id,
-        "task1_reply_json": final_state.task1_reply_json,
-        "input_video": final_state.input_video,
-        "video_frames_dir": final_state.video_frames_dir,
-        "plan_json": final_state.plan_json,
-        "selected_avatar_id": final_state.selected_avatar_id,
-        "selected_tts_speaker_id": final_state.selected_tts_speaker_id,
-        "background": final_state.background,
-        "session_id": final_state.session_id,
-        "turn_id": final_state.turn_id,
-        "reply_text": final_state.reply_text,
-        "tts_speaker_id": final_state.tts_speaker_id,
-        "reply_wav": final_state.reply_wav,
-        "deeptalk_npy": final_state.deeptalk_npy,
-        "flame_motion_npz": final_state.flame_motion_npz,
-        "point_cloud_path": final_state.point_cloud_path,
-        "viewer_command": final_state.viewer_command,
-        "viewer_started": final_state.viewer_started,
-        "viewer_pid": final_state.viewer_pid,
-        "artifact_dir": final_state.artifact_dir,
-        "artifact_reply_wav": final_state.artifact_reply_wav,
-        "artifact_enhanced_reply_wav": final_state.artifact_enhanced_reply_wav,
-        "artifact_flame_motion_npz": final_state.artifact_flame_motion_npz,
-        "output_video": final_state.output_video,
-        "output_white_model_video": final_state.output_white_model_video,
-        "video_export_command": final_state.video_export_command,
-        "video_export_error": final_state.video_export_error,
-        "finished_stages": final_state.finished_stages,
-        "failed_stage": final_state.failed_stage,
-        "error": final_state.error,
-        "run_dir": final_state.run_dir,
-        "log_dir": final_state.log_dir,
-    }
-    save_json(manifest_path, manifest)
-    if final_state.artifact_dir:
-        save_json(os.path.join(final_state.artifact_dir, "manifest.json"), manifest)
+    manifest = write_manifest(final_state)
 
     print(json.dumps(manifest, ensure_ascii=False, indent=2))
 

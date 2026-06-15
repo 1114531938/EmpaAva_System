@@ -44,6 +44,7 @@
 
 - `docs/PROJECT_STRUCTURE.md`
 - `docs/SERVICES_AND_PORTS.md`
+- `docs/AGENT_ARCHITECTURE.md`
 - `web_app/README.md`
 - `scripts/README.md`
 

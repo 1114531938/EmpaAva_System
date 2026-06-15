@@ -3,18 +3,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from pathlib import Path
 from types import SimpleNamespace
 
 import yaml
 
+from manifest_utils import save_json
 from tools.artifact_export_tool import ArtifactExportTool
-
-
-def save_json(path: str, data: dict) -> None:
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
 
 
 def main() -> None:

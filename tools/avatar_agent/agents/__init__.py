@@ -1,7 +1,15 @@
 from __future__ import annotations
 
+from .dialogue_agent import DialogueAgent
+from .embodiment_agent import EmbodimentAgent
 from .input_agent import InputAgent
 from .plan_agent import PlanAgent
 from .render_agent import RenderAgent
 
-__all__ = ["InputAgent", "PlanAgent", "RenderAgent"]
+__all__ = [
+    "InputAgent",
+    "DialogueAgent",
+    "PlanAgent",
+    "EmbodimentAgent",
+    "RenderAgent",
+]

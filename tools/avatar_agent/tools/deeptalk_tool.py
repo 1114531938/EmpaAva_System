@@ -135,6 +135,7 @@ class DEEPTalkTool:
                 raise RuntimeError(f"DEEPTalk failed before writing params: {stderr}")
             raise FileNotFoundError(f"DEEPTalk output not found in {out_dir}")
 
-        shutil.copy2(out_npy, run_npy_path)
+        if os.path.abspath(out_npy) != os.path.abspath(run_npy_path):
+            shutil.copy2(out_npy, run_npy_path)
 
         state.deeptalk_npy = run_npy_path

@@ -26,7 +26,9 @@ class PipelineState:
 
     perception_json: Optional[str] = None
     task1_input_json: Optional[str] = None
+    perception_result_json: Optional[str] = None
     plan_json: Optional[str] = None
+    reply_plan_json: Optional[str] = None
     selected_avatar_id: Optional[str] = None
     selected_tts_speaker_id: Optional[str] = None
     background: Optional[str] = None
