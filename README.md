@@ -40,6 +40,13 @@
 └── outputs/                         # 运行结果、网页结果、服务日志
 ```
 
+更细的结构索引见：
+
+- `docs/PROJECT_STRUCTURE.md`
+- `docs/SERVICES_AND_PORTS.md`
+- `web_app/README.md`
+- `scripts/README.md`
+
 ### 关键子目录
 
 ```text
@@ -143,13 +150,32 @@ bash scripts/avatar_service.sh start
 默认端口：
 
 ```text
-7861  web
+7861  web / main studio
+7862  booth / 3DEPB
 8788  TTS worker
 8789  AvaMERG worker
 8790  DEEPTalk worker
 8791  perception worker
 8792  Gaussian render worker
 ```
+
+### 5.1.1 两个前端入口
+
+当前有两个面向用户的前端入口：
+
+```text
+7861  主研究/调试界面，默认启动脚本 scripts/avatar_service.sh
+7862  Booth / 3DEPB 界面，默认启动脚本 scripts/avatar_booth_service.sh
+```
+
+后端关系：
+
+- `web_app/server.py` 是统一 FastAPI 后端，提供 `/api/*`、`/studio`、`/booth`。
+- `scripts/run_web.sh` 默认把 `/` 指到主界面 `index.html`。
+- `scripts/run_booth.sh` 设置 `BOOTH_DEFAULT_ROUTE=1`，把 `/` 指到内置 Booth 页面。
+- `scripts/avatar_booth_service.sh` 当前默认走 `scripts/run_3depb.sh`，需要 `3DEPB_runs/3DEPB/server.py`。
+
+如果只想用内置 Booth 页面，不走外部 3DEPB，可以参考 `docs/SERVICES_AND_PORTS.md`。
 
 ### 5.2 重启
 
@@ -184,7 +210,7 @@ bash scripts/avatar_service.sh start-gaussian-render
 - 就认为它“已经在运行”
 - **不会强制重启它**
 
-所以如果你更新了 worker 代码，但旧进程还占着端口，单纯 `start` 可能不会生效。  
+所以如果你更新了 worker 代码，但旧进程还占着端口，单纯 `start` 可能不会生效。
 这种情况下请用：
 
 ```bash
@@ -197,6 +223,25 @@ bash scripts/avatar_service.sh restart
 
 ```bash
 PORT=7860 bash scripts/avatar_service.sh start
+```
+
+### 5.6 Booth / 3DEPB 入口
+
+```bash
+cd /scratch/e1554543/avatar_system_full
+bash scripts/avatar_booth_service.sh start
+```
+
+默认打开：
+
+```text
+http://localhost:7862
+```
+
+该入口会复用同一套 worker 管理逻辑，并把服务日志写到：
+
+```text
+outputs/service_logs/booth_web.log
 ```
 
 ## 6. Web 页面功能
@@ -231,7 +276,7 @@ http://localhost:7861
 
 #### 3D Render
 
-当前主线方案。  
+当前主线方案。
 它不是浏览器自己做高质量 Gaussian 渲染，而是：
 
 - 前端负责播放、拖拽、进度条、音频同步
@@ -282,7 +327,7 @@ http://localhost:7861
 
 ### 7.2 调试方案
 
-`3D Debug / WebGPU` 是继续研究纯前端渲染路线的实验入口。  
+`3D Debug / WebGPU` 是继续研究纯前端渲染路线的实验入口。
 目前还达不到 `final_video.mp4` 的质量。
 
 ## 8. 运行输出
@@ -353,7 +398,7 @@ outputs/web_<run_id>/artifacts/
 - 端口上的监听进程 PID
 - PID 文件是否匹配这个监听进程
 
-如果端口上是“旧进程 / 孤儿进程 / 不是脚本当前管理的进程”，脚本会先替换它再启动新服务。  
+如果端口上是“旧进程 / 孤儿进程 / 不是脚本当前管理的进程”，脚本会先替换它再启动新服务。
 常用命令：
 
 ```bash
@@ -363,7 +408,7 @@ bash scripts/avatar_service.sh status
 
 ### 10.2 为什么页面报 `Gaussian render worker failed: HTTP Error 404: Not Found`
 
-这通常说明 web server 和 Gaussian render worker 版本不一致。  
+这通常说明 web server 和 Gaussian render worker 版本不一致。
 现在推荐直接执行：
 
 ```bash
@@ -415,4 +460,15 @@ ss -ltnp | grep 8792
 ```bash
 cd /scratch/e1554543/avatar_system_full
 bash scripts/avatar_service.sh restart
+```
+
+## 12. 后续部署提示
+
+GitHub 仓库只保存源码和轻量配置说明，不保存模型、数据、缓存、容器和运行输出。
+部署到阿里云前请先看：
+
+```text
+docs/DEPLOY_ALIYUN.md
+config/runtime.env.example
+SOURCE_RELEASE.md
 ```

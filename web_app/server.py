@@ -1529,6 +1529,29 @@ def _media_has_audio(path: Path) -> bool:
     return "audio" in (proc.stdout or "")
 
 
+def _extract_wav_from_video(video_path: Path, wav_path: Path) -> None:
+    command = [
+        _ffmpeg_bin(),
+        "-y",
+        "-i",
+        str(video_path),
+        "-vn",
+        "-ac",
+        "1",
+        "-ar",
+        "16000",
+        "-f",
+        "wav",
+        str(wav_path),
+    ]
+    proc = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=120)
+    if proc.returncode != 0 or not wav_path.exists() or wav_path.stat().st_size == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Could not extract microphone audio from the uploaded user video.",
+        )
+
+
 def _normalize_booth_segment(source: Path, output: Path, background_id: str, background_path: Path | None) -> tuple[bool, str]:
     source = source.resolve()
     output = output.resolve()
@@ -1698,7 +1721,7 @@ def get_booth_session(request: Request, session_id: str) -> JSONResponse:
 async def create_booth_turn(
     request: Request,
     session_id: str,
-    audio: UploadFile = File(...),
+    audio: Optional[UploadFile] = File(None),
     video: Optional[UploadFile] = File(None),
     background_image: Optional[UploadFile] = File(None),
     background_id: str = Form("soft_studio"),
@@ -1706,25 +1729,37 @@ async def create_booth_turn(
 ) -> JSONResponse:
     user = _require_user(request)
     _require_booth_session(session_id, int(user["id"]))
-    filename = audio.filename or "booth_recording.wav"
-    if not filename.lower().endswith(".wav"):
+    audio_filename = audio.filename if audio and audio.filename else ""
+    video_filename = video.filename if video and video.filename else ""
+    if not audio_filename and not video_filename:
+        raise HTTPException(status_code=400, detail="Record a video or audio turn before sending.")
+    if audio_filename and not audio_filename.lower().endswith(".wav"):
         raise HTTPException(status_code=400, detail="Booth audio must be a .wav file.")
 
     turn_id = secrets.token_urlsafe(12)
     turn_dir = BOOTH_UPLOAD_ROOT / session_id / turn_id
     turn_dir.mkdir(parents=True, exist_ok=True)
-    input_wav = turn_dir / "input.wav"
-    with input_wav.open("wb") as f:
-        shutil.copyfileobj(audio.file, f)
 
     input_video_path: Path | None = None
     input_video_url: str | None = None
-    if video and video.filename:
-        suffix = _safe_upload_suffix(video.filename, ".webm")
+    if video_filename:
+        suffix = _safe_upload_suffix(video_filename, ".webm")
+        if suffix not in {".webm", ".mp4", ".mov", ".m4v"}:
+            raise HTTPException(status_code=400, detail="Booth video must be webm, mp4, mov, or m4v.")
         input_video_path = turn_dir / f"input_video{suffix}"
         with input_video_path.open("wb") as f:
             shutil.copyfileobj(video.file, f)
         input_video_url = _outputs_url(str(input_video_path))
+
+    input_wav = turn_dir / "input.wav"
+    if audio_filename and audio:
+        with input_wav.open("wb") as f:
+            shutil.copyfileobj(audio.file, f)
+    elif input_video_path:
+        _extract_wav_from_video(input_video_path, input_wav)
+
+    if not input_wav.exists() or input_wav.stat().st_size == 0:
+        raise HTTPException(status_code=400, detail="No usable microphone audio was captured.")
     frame_paths = _extract_video_frames(input_video_path, turn_dir / "video_frames") if input_video_path else []
 
     background_url: str | None = None
@@ -1771,10 +1806,31 @@ async def create_booth_turn(
             (background_id, background_url, now, session_id),
         )
 
+    if os.environ.get("BOOTH_INPUT_TEST_ONLY") == "1":
+        with db_lock, _db() as conn:
+            conn.execute(
+                "UPDATE booth_turns SET status = ?, updated_at = ? WHERE id = ?",
+                ("captured", _now_iso(), turn_id),
+            )
+            row = conn.execute("SELECT * FROM booth_turns WHERE id = ?", (turn_id,)).fetchone()
+        return JSONResponse(
+            {
+                "ok": True,
+                "mode": "input_test_only",
+                "turn": _booth_turn_payload(row),
+                "job": {
+                    "status": "captured",
+                    "input_wav": str(input_wav),
+                    "input_video_path": str(input_video_path) if input_video_path else None,
+                    "input_video_url": input_video_url,
+                },
+            }
+        )
+
     try:
         job_payload = _start_pipeline_job(
             input_wav=input_wav,
-            source_filename=filename,
+            source_filename=audio_filename or video_filename or "booth_turn.wav",
             avatar_id=avatar_id,
             tts_speaker_id=tts_speaker_id,
             no_llm=no_llm_effective,

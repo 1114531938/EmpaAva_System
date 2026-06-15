@@ -5,6 +5,7 @@ import os
 import shlex
 import urllib.error
 import urllib.request
+import subprocess
 
 from shell_runner import run_bash_in_container
 
@@ -29,6 +30,47 @@ def _find_first_value(obj, keys):
 class Task1Tool:
     def __init__(self, config: dict):
         self.config = config
+
+    def _cuda_available(self) -> bool:
+        try:
+            proc = subprocess.run(
+                ["nvidia-smi"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                timeout=5,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return False
+        return proc.returncode == 0
+
+    def _write_fallback_reply(self, state, out_json: str, reason: str) -> None:
+        with open(state.task1_input_json, "r", encoding="utf-8") as f:
+            batch = json.load(f)
+
+        reply_text = (
+            "我听到了你的感受。我们可以慢一点，把最重要的部分先说清楚。"
+        )
+        payload = {
+            "input_json": state.task1_input_json,
+            "batch_preview": batch,
+            "used_method": "fallback",
+            "fallback_reason": reason,
+            "raw_result": {
+                "reply_text": reply_text,
+                "generated_text": reply_text,
+            },
+            "reply_text": reply_text,
+            "response_emotion": batch.get("response_emotion", "warm") if isinstance(batch, dict) else "warm",
+        }
+        os.makedirs(os.path.dirname(out_json), exist_ok=True)
+        with open(out_json, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+
+        log_path = os.path.join(state.log_dir, "task1.log")
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(f"[task1_fallback] {reason}; wrote {out_json}\n")
 
     def _load_reply_state(self, state, out_json: str) -> None:
         if not os.path.exists(out_json):
@@ -118,6 +160,11 @@ class Task1Tool:
         out_json = os.path.join(out_dir, f"{state.base_name}_task1_reply.json")
 
         if self._try_worker(state, out_json):
+            self._load_reply_state(state, out_json)
+            return
+
+        if not self._cuda_available():
+            self._write_fallback_reply(state, out_json, "CUDA/GPU is unavailable, skipping AvaMERG 7B inference")
             self._load_reply_state(state, out_json)
             return
 

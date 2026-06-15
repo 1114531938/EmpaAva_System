@@ -30,6 +30,8 @@ cache/
 containers/
 outputs/
 perception_layer/results/
+3DEPB_runs/3DEPB/data/
+3DEPB_runs/3DEPB/recordings/
 EmotiVoice_runs/input/
 EmotiVoice_runs/repo/outputs*/
 GSavatar_runs/GaussianAvatars/viewer_output/
@@ -87,5 +89,6 @@ dist/
 # Local environment values and credentials
 .env
 .env.*
+config/runtime.env
 *.pem
 *.key

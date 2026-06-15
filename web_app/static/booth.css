@@ -255,6 +255,7 @@ button.primary:hover:not(:disabled) {
 
 .status-row {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
   padding: 0 16px 16px;
@@ -270,6 +271,21 @@ button.primary:hover:not(:disabled) {
   margin-top: 3px;
   color: var(--muted);
   font-size: 13px;
+}
+
+.recorded-preview-wrap {
+  width: min(260px, 38vw);
+  min-width: 160px;
+}
+
+.recorded-preview-wrap video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 1px solid #c7d3dc;
+  border-radius: 8px;
+  background: #101827;
+  object-fit: cover;
 }
 
 .side-panel {
@@ -382,6 +398,23 @@ summary {
 
 .turn-card a,
 .history-item button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  border: 1px solid #c7d3dc;
+  border-radius: 7px;
+  padding: 0 10px;
+  background: #fff;
+  color: #1d2a35;
+  text-decoration: none;
+}
+
+.turn-card a + a {
+  margin-left: 6px;
+}
+
+.turn-card a,
+.history-item button {
   margin-top: 8px;
 }
 
@@ -431,6 +464,14 @@ summary {
   .split-actions {
     grid-template-columns: 1fr;
     display: grid;
+  }
+
+  .status-row {
+    display: grid;
+  }
+
+  .recorded-preview-wrap {
+    width: 100%;
   }
 
   .top-actions button,

@@ -13,6 +13,8 @@ const els = {
   replayBtn: document.getElementById("replayBtn"),
   statusText: document.getElementById("statusText"),
   detailText: document.getElementById("detailText"),
+  recordedPreviewWrap: document.getElementById("recordedPreviewWrap"),
+  recordedPreview: document.getElementById("recordedPreview"),
   audioPreview: document.getElementById("audioPreview"),
   usernameInput: document.getElementById("usernameInput"),
   passwordInput: document.getElementById("passwordInput"),
@@ -47,13 +49,36 @@ let exportPollTimer = null;
 let audioContext = null;
 let sourceNode = null;
 let processorNode = null;
+let monitorGain = null;
 let recordingBuffers = [];
 let recordingLength = 0;
 let lastReplyUrl = "";
+let recordedPreviewUrl = "";
 
 function setStatus(status, detail = "") {
   els.statusText.textContent = status;
   els.detailText.textContent = detail;
+}
+
+function clearRecordedPreview() {
+  if (recordedPreviewUrl) URL.revokeObjectURL(recordedPreviewUrl);
+  recordedPreviewUrl = "";
+  els.recordedPreview.removeAttribute("src");
+  els.recordedPreview.load();
+  els.recordedPreviewWrap.hidden = true;
+}
+
+function stopCamera() {
+  if (recorder && recorder.state !== "inactive") recorder.stop();
+  if (cameraStream) {
+    cameraStream.getTracks().forEach((track) => track.stop());
+  }
+  cameraStream = null;
+  els.userPreview.srcObject = null;
+  els.cameraBtn.textContent = "Enable Camera";
+  els.recordBtn.disabled = true;
+  els.stopBtn.disabled = true;
+  setStatus("Camera off", "Enable camera when you are ready to record another turn.");
 }
 
 function writeString(view, offset, value) {
@@ -94,6 +119,16 @@ function encodeWav(buffers, length, sampleRate) {
   return new Blob([arrayBuffer], { type: "audio/wav" });
 }
 
+function chooseRecordingMimeType() {
+  const candidates = [
+    "video/webm;codecs=vp9,opus",
+    "video/webm;codecs=vp8,opus",
+    "video/webm",
+    "video/mp4",
+  ];
+  return candidates.find((type) => MediaRecorder.isTypeSupported(type)) || "";
+}
+
 async function fetchJson(url, options = {}) {
   const response = await fetch(url, options);
   const text = await response.text();
@@ -111,10 +146,14 @@ async function fetchJson(url, options = {}) {
 
 function updateAuthUi() {
   els.logoutBtn.hidden = !currentUser;
-  els.recordBtn.disabled = !currentUser || !cameraStream;
-  els.sendBtn.disabled = !currentUser || !recordedAudioFile;
+  els.recordBtn.disabled = !cameraStream;
+  els.sendBtn.disabled = !currentUser || (!recordedAudioFile && !recordedVideoBlob);
   if (currentUser) {
     setStatus("Signed in", `Welcome ${currentUser.username}. Create or continue a session.`);
+  } else if (recordedAudioFile || recordedVideoBlob) {
+    setStatus("Turn recorded", "Login or register before sending this turn.");
+  } else if (cameraStream) {
+    setStatus("Camera ready", "Record a short video message, then login before sending.");
   }
 }
 
@@ -171,13 +210,20 @@ function applyBackground() {
 }
 
 async function enableCamera() {
+  if (cameraStream) {
+    stopCamera();
+    return;
+  }
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error("This browser does not support camera and microphone capture.");
+  }
   cameraStream = await navigator.mediaDevices.getUserMedia({
     audio: true,
     video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
   });
   els.userPreview.srcObject = cameraStream;
-  els.cameraBtn.textContent = "Camera On";
-  els.recordBtn.disabled = !currentUser;
+  els.cameraBtn.textContent = "Turn Camera Off";
+  els.recordBtn.disabled = false;
   setStatus("Camera ready", "Record a short video message for the avatar.");
 }
 
@@ -188,10 +234,14 @@ async function startRecording() {
   recordedAudioFile = null;
   recordingBuffers = [];
   recordingLength = 0;
+  clearRecordedPreview();
+  els.audioPreview.hidden = true;
 
   audioContext = new AudioContext();
   sourceNode = audioContext.createMediaStreamSource(cameraStream);
   processorNode = audioContext.createScriptProcessor(4096, 1, 1);
+  monitorGain = audioContext.createGain();
+  monitorGain.gain.value = 0;
   processorNode.onaudioprocess = (event) => {
     const channel = event.inputBuffer.getChannelData(0);
     const copy = new Float32Array(channel);
@@ -199,28 +249,38 @@ async function startRecording() {
     recordingLength += copy.length;
   };
   sourceNode.connect(processorNode);
-  processorNode.connect(audioContext.destination);
+  processorNode.connect(monitorGain);
+  monitorGain.connect(audioContext.destination);
 
-  const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")
-    ? "video/webm;codecs=vp9,opus"
-    : "video/webm";
-  recorder = new MediaRecorder(cameraStream, { mimeType });
+  if (!window.MediaRecorder) {
+    throw new Error("This browser does not support video recording.");
+  }
+  const mimeType = chooseRecordingMimeType();
+  recorder = new MediaRecorder(cameraStream, mimeType ? { mimeType } : undefined);
   recorder.ondataavailable = (event) => {
     if (event.data && event.data.size > 0) recordedChunks.push(event.data);
   };
   recorder.onstop = async () => {
-    recordedVideoBlob = new Blob(recordedChunks, { type: "video/webm" });
-    const wavBlob = encodeWav(recordingBuffers, recordingLength, audioContext.sampleRate);
-    recordedAudioFile = new File([wavBlob], `booth_turn_${Date.now()}.wav`, { type: "audio/wav" });
-    els.audioPreview.src = URL.createObjectURL(recordedAudioFile);
-    els.audioPreview.hidden = false;
-    els.sendBtn.disabled = !currentUser;
-    els.recordBtn.disabled = !currentUser;
+    recordedVideoBlob = new Blob(recordedChunks, { type: recorder.mimeType || mimeType || "video/webm" });
+    if (recordedVideoBlob.size > 0) {
+      recordedPreviewUrl = URL.createObjectURL(recordedVideoBlob);
+      els.recordedPreview.src = recordedPreviewUrl;
+      els.recordedPreviewWrap.hidden = false;
+    }
+    if (recordingLength > 0) {
+      const wavBlob = encodeWav(recordingBuffers, recordingLength, audioContext.sampleRate);
+      recordedAudioFile = new File([wavBlob], `booth_turn_${Date.now()}.wav`, { type: "audio/wav" });
+      els.audioPreview.src = URL.createObjectURL(recordedAudioFile);
+      els.audioPreview.hidden = false;
+    }
+    els.sendBtn.disabled = !currentUser || (!recordedAudioFile && !recordedVideoBlob);
+    els.recordBtn.disabled = false;
     els.stopBtn.disabled = true;
     if (processorNode) processorNode.disconnect();
     if (sourceNode) sourceNode.disconnect();
+    if (monitorGain) monitorGain.disconnect();
     await audioContext.close();
-    setStatus("Turn recorded", "Send it to generate the avatar reply.");
+    setStatus("Turn recorded", currentUser ? "Send it to generate the avatar reply." : "Login or register before sending this turn.");
   };
   recorder.start(250);
   els.recordBtn.disabled = true;
@@ -234,15 +294,19 @@ function stopRecording() {
 }
 
 async function sendTurn() {
-  if (!recordedAudioFile) {
+  if (!recordedAudioFile && !recordedVideoBlob) {
     setStatus("No recording", "Record a turn before sending.");
     return;
   }
   await ensureSession();
   const formData = new FormData();
-  formData.append("audio", recordedAudioFile, recordedAudioFile.name);
+  if (recordedAudioFile) {
+    formData.append("audio", recordedAudioFile, recordedAudioFile.name);
+  }
   if (recordedVideoBlob) {
-    formData.append("video", new File([recordedVideoBlob], `booth_turn_${Date.now()}.webm`, { type: "video/webm" }));
+    const videoType = recordedVideoBlob.type || "video/webm";
+    const extension = videoType.includes("mp4") ? "mp4" : "webm";
+    formData.append("video", new File([recordedVideoBlob], `booth_turn_${Date.now()}.${extension}`, { type: videoType }));
   }
   formData.append("background_id", els.backgroundSelect.value || "soft_studio");
   const backgroundFile = els.backgroundImageInput.files && els.backgroundImageInput.files[0];
@@ -291,6 +355,14 @@ function renderSession() {
     const detail = document.createElement("p");
     detail.textContent = turn.reply_text || turn.error || match.reason || "Waiting for generated reply.";
     card.append(title, detail);
+    if (turn.input_video_url) {
+      const inputLink = document.createElement("a");
+      inputLink.href = turn.input_video_url;
+      inputLink.target = "_blank";
+      inputLink.rel = "noreferrer";
+      inputLink.textContent = "Open captured video";
+      card.appendChild(inputLink);
+    }
     if (turn.reply_video_url) {
       const link = document.createElement("a");
       link.href = turn.reply_video_url;

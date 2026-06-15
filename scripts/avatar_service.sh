@@ -24,6 +24,7 @@ GAUSSIAN_RENDER_WORKER_HOST="${GAUSSIAN_RENDER_WORKER_HOST:-127.0.0.1}"
 GAUSSIAN_RENDER_WORKER_PORT="${GAUSSIAN_RENDER_WORKER_PORT:-8792}"
 GAUSSIAN_RENDER_WORKER_URL="http://${GAUSSIAN_RENDER_WORKER_HOST}:${GAUSSIAN_RENDER_WORKER_PORT}"
 START_GAUSSIAN_RENDER_WORKER="${START_GAUSSIAN_RENDER_WORKER:-1}"
+START_TTS_WORKER="${START_TTS_WORKER:-1}"
 RUN_DIR="$ROOT/outputs/service_logs"
 WEB_SCRIPT="${WEB_SCRIPT:-$ROOT/scripts/run_web.sh}"
 WEB_LOG="${WEB_LOG:-$RUN_DIR/web.log}"
@@ -293,7 +294,9 @@ status() {
 
 case "${1:-start}" in
   start)
-    start_tts
+    if [[ "$START_TTS_WORKER" == "1" ]]; then
+      start_tts
+    fi
     if [[ "$START_PERCEPTION_WORKER" == "1" ]]; then
       start_perception
     fi

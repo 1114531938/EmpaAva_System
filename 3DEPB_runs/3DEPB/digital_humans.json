@@ -1,0 +1,46 @@
+{
+  "digital_humans": [
+    {
+      "avatar_id": "306",
+      "tts_speaker_id": "6224",
+      "name": "Avatar 306",
+      "role": "Avatar 306 · Voice 6224",
+      "color": "#32d0a4"
+    },
+    {
+      "avatar_id": "1001",
+      "tts_speaker_id": "6224",
+      "name": "Avatar 1001",
+      "role": "Avatar 1001 · Voice 6224",
+      "color": "#6fb7ff"
+    },
+    {
+      "avatar_id": "2001",
+      "tts_speaker_id": "1851",
+      "name": "NeRSemble 074",
+      "role": "Avatar 2001 · Voice 1851",
+      "color": "#ffb84d"
+    },
+    {
+      "avatar_id": "2001_2",
+      "tts_speaker_id": "6139",
+      "name": "Avatar 2001_2",
+      "role": "Avatar 2001_2 · Voice 6139",
+      "color": "#f0798d"
+    },
+    {
+      "avatar_id": "2002",
+      "tts_speaker_id": "3738",
+      "name": "NeRSemble 165",
+      "role": "Avatar 2002 · Voice 3738",
+      "color": "#a78bfa"
+    },
+    {
+      "avatar_id": "2003",
+      "tts_speaker_id": "6385",
+      "name": "NeRSemble 218",
+      "role": "Avatar 2003 · Voice 6385",
+      "color": "#22c55e"
+    }
+  ]
+}

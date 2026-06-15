@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>3D Emotional Avatar Booth</title>
-    <link rel="stylesheet" href="/static/booth.css?v=booth-mvp-20260603-01" />
+    <link rel="stylesheet" href="/static/booth.css?v=video-call-20260606-05" />
   </head>
   <body>
     <div class="booth-shell">
@@ -49,7 +49,10 @@
           <div class="status-row">
             <div>
               <strong id="statusText">Ready</strong>
-              <span id="detailText">Login, enable camera, then record a turn.</span>
+              <span id="detailText">Enable camera, record a turn, then login before sending.</span>
+            </div>
+            <div class="recorded-preview-wrap" id="recordedPreviewWrap" hidden>
+              <video id="recordedPreview" playsinline controls></video>
             </div>
             <audio id="audioPreview" controls hidden></audio>
           </div>
@@ -124,6 +127,6 @@
       </div>
     </div>
 
-    <script src="/static/booth.js?v=booth-mvp-20260603-01"></script>
+    <script src="/static/booth.js?v=video-call-20260606-05"></script>
   </body>
 </html>
