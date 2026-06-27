@@ -9,6 +9,7 @@ import secrets
 import shlex
 import shutil
 import sqlite3
+import ssl
 import subprocess
 import threading
 import uuid
@@ -46,6 +47,9 @@ PIPELINE_TIMEOUT_SECONDS = int(os.environ.get("DEPB_PIPELINE_TIMEOUT", "1800"))
 PIPELINE_AVATAR_ID = os.environ.get("DEPB_AVATAR_ID", "306")
 PIPELINE_TTS_SPEAKER_ID = os.environ.get("DEPB_TTS_SPEAKER_ID", "6224")
 PIPELINE_NO_LLM = os.environ.get("DEPB_NO_LLM", "0") == "1" or not bool(os.environ.get("OPENAI_API_KEY"))
+DEFAULT_OPENAI_BASE_URL = "https://openrouter.ai/api/v1"
+DEFAULT_LLM_MODEL = "liquid/lfm-2.5-1.2b-instruct:free"
+SETTINGS_LOCK = threading.Lock()
 FFMPEG_BIN = Path(os.environ.get("DEPB_FFMPEG", str(AVATAR_ROOT / "runtime" / "cache" / "bin" / "ffmpeg")))
 PIPELINE_STAGES = [
     ("input_agent", "Preparing video and audio input"),
@@ -66,6 +70,16 @@ PIPELINE_STAGE_LABELS = dict(PIPELINE_STAGES)
 PIPELINE_JOBS = {}
 PIPELINE_JOBS_LOCK = threading.Lock()
 SUBTITLE_TRANSLATION_CACHE = {}
+
+
+def https_context():
+    try:
+        import certifi
+    except ImportError:
+        return None
+    return ssl.create_default_context(cafile=certifi.where())
+
+
 WORKER_HEALTH_URLS = {
     "tts": os.environ.get("TTS_WORKER_URL", "http://127.0.0.1:8788").rstrip("/"),
     "avamerg": os.environ.get("AVAMERG_WORKER_URL", "http://127.0.0.1:8789").rstrip("/"),
@@ -105,6 +119,57 @@ def now_iso():
     return datetime.now(timezone.utc).isoformat()
 
 
+def pipeline_no_llm():
+    return os.environ.get("DEPB_NO_LLM", "0") == "1" or not bool(os.environ.get("OPENAI_API_KEY", "").strip())
+
+
+def settings_payload():
+    key = os.environ.get("OPENAI_API_KEY", "").strip()
+    base_url = os.environ.get("OPENAI_BASE_URL", DEFAULT_OPENAI_BASE_URL).strip() or DEFAULT_OPENAI_BASE_URL
+    model = os.environ.get("LLM_MODEL", DEFAULT_LLM_MODEL).strip() or DEFAULT_LLM_MODEL
+    return {
+        "has_openai_api_key": bool(key),
+        "openai_key_preview": f"{key[:8]}...{key[-4:]}" if len(key) >= 16 else "",
+        "openai_base_url": base_url,
+        "llm_model": model,
+        "llm_enabled": not pipeline_no_llm(),
+    }
+
+
+def load_persisted_runtime_settings():
+    if not DB_PATH.exists():
+        return
+    try:
+        with connect() as conn:
+            rows = conn.execute("SELECT key, value FROM app_settings").fetchall()
+    except sqlite3.Error:
+        return
+    for row in rows:
+        key = row["key"]
+        value = str(row["value"] or "").strip()
+        if key in {"OPENAI_API_KEY", "OPENAI_BASE_URL", "LLM_MODEL"} and value:
+            os.environ[key] = value
+
+
+def save_persisted_runtime_settings(api_key, base_url, model, clear_key=False):
+    with connect() as conn:
+        if clear_key:
+            conn.execute("DELETE FROM app_settings WHERE key = 'OPENAI_API_KEY'")
+        elif api_key:
+            conn.execute(
+                "INSERT OR REPLACE INTO app_settings(key, value, updated_at) VALUES (?, ?, ?)",
+                ("OPENAI_API_KEY", api_key, now_iso()),
+            )
+        conn.execute(
+            "INSERT OR REPLACE INTO app_settings(key, value, updated_at) VALUES (?, ?, ?)",
+            ("OPENAI_BASE_URL", base_url, now_iso()),
+        )
+        conn.execute(
+            "INSERT OR REPLACE INTO app_settings(key, value, updated_at) VALUES (?, ?, ?)",
+            ("LLM_MODEL", model, now_iso()),
+        )
+
+
 def looks_chinese_text(text):
     return bool(re.search(r"[\u4e00-\u9fff]", text or ""))
 
@@ -119,7 +184,7 @@ def translate_subtitle_to_english(text):
     if not api_key:
         return ""
     base_url = os.environ.get("OPENAI_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
-    model = os.environ.get("LLM_MODEL", "openai/gpt-oss-120b:free")
+    model = os.environ.get("LLM_MODEL", "liquid/lfm-2.5-1.2b-instruct:free")
     payload = {
         "model": model,
         "messages": [
@@ -141,7 +206,7 @@ def translate_subtitle_to_english(text):
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=20) as resp:
+        with urllib.request.urlopen(request, timeout=20, context=https_context()) as resp:
             data = json.loads(resp.read().decode("utf-8"))
         translated = data["choices"][0]["message"]["content"].strip().strip("\"'")
     except (OSError, urllib.error.URLError, TimeoutError, KeyError, IndexError, TypeError, json.JSONDecodeError):
@@ -320,6 +385,20 @@ def clean_booth_background(value):
     background = str(value or "").strip()
     valid = {item["id"] for item in list_booth_backgrounds()}
     return background if background in valid else "study"
+
+
+def booth_background_image_path(background_id):
+    background_id = clean_booth_background(background_id)
+    item = next((bg for bg in list_booth_backgrounds() if bg["id"] == background_id), None)
+    image_url = str((item or {}).get("image_url") or "").strip()
+    if not image_url.startswith("/digital_human_backgrounds/"):
+        return None
+    candidate = (DIGITAL_HUMAN_BACKGROUND_DIR / image_url.removeprefix("/digital_human_backgrounds/")).resolve()
+    try:
+        candidate.relative_to(DIGITAL_HUMAN_BACKGROUND_DIR.resolve())
+    except ValueError:
+        return None
+    return candidate if candidate.exists() else None
 
 
 def load_avatar_labels():
@@ -601,6 +680,12 @@ def init_db():
               size_bytes INTEGER NOT NULL,
               created_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS app_settings (
+              key TEXT PRIMARY KEY,
+              value TEXT NOT NULL,
+              updated_at TEXT NOT NULL
+            );
             """
         )
         count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
@@ -696,6 +781,9 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/api/users":
             self.handle_list_users()
             return
+        if path == "/api/settings":
+            self.handle_get_settings()
+            return
         if path == "/api/digital_humans":
             self.handle_list_digital_humans()
             return
@@ -729,6 +817,9 @@ class Handler(SimpleHTTPRequestHandler):
             return
         if path == "/api/users":
             self.handle_create_user()
+            return
+        if path == "/api/settings":
+            self.handle_update_settings()
             return
         if path == "/api/avatar/respond":
             self.handle_avatar_respond()
@@ -883,6 +974,35 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_json({"error": "Admin only"}, HTTPStatus.FORBIDDEN)
             return None
         return user
+
+    def handle_get_settings(self):
+        if not self.require_admin():
+            return
+        with SETTINGS_LOCK:
+            payload = settings_payload()
+        self.send_json(payload)
+
+    def handle_update_settings(self):
+        if not self.require_admin():
+            return
+        data = self.read_json()
+        if data is None:
+            return
+        api_key = str(data.get("openai_api_key") or "").strip()
+        base_url = str(data.get("openai_base_url") or "").strip() or DEFAULT_OPENAI_BASE_URL
+        model = str(data.get("llm_model") or "").strip() or DEFAULT_LLM_MODEL
+        clear_key = bool(data.get("clear_openai_api_key"))
+
+        with SETTINGS_LOCK:
+            if clear_key:
+                os.environ.pop("OPENAI_API_KEY", None)
+            elif api_key:
+                os.environ["OPENAI_API_KEY"] = api_key
+            os.environ["OPENAI_BASE_URL"] = base_url
+            os.environ["LLM_MODEL"] = model
+            save_persisted_runtime_settings(api_key, base_url, model, clear_key)
+            payload = settings_payload()
+        self.send_json(payload)
 
     def handle_login(self):
         data = self.read_json()
@@ -1596,9 +1716,12 @@ class Handler(SimpleHTTPRequestHandler):
             "--background",
             clean_booth_background(background),
         ]
+        background_image = booth_background_image_path(background)
+        if background_image:
+            command.extend(["--background_image", str(background_image)])
         if input_video and input_video_valid:
             command.extend(["--input_video", str(input_video)])
-        if PIPELINE_NO_LLM:
+        if pipeline_no_llm():
             command.append("--no_llm")
         health = worker_health()
 
@@ -2562,22 +2685,75 @@ class Handler(SimpleHTTPRequestHandler):
             target = (ROOT / path.lstrip("/")).resolve()
             static_root = ROOT.resolve()
         if not str(target).startswith(str(static_root)) or not target.exists() or target.is_dir():
+            if path.startswith(("/outputs/", "/exports/", "/vendor/", "/digital_human_images/", "/digital_human_backgrounds/")):
+                self.send_error(HTTPStatus.NOT_FOUND)
+                return
             target = ROOT / "index.html"
 
         content_type = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
-        body = target.read_bytes()
-        self.send_response(HTTPStatus.OK)
+        file_size = target.stat().st_size
+        range_header = self.headers.get("Range", "")
+        byte_range = self.parse_byte_range(range_header, file_size) if range_header else None
+        if range_header and byte_range is None:
+            self.send_response(HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+            self.send_header("Content-Range", f"bytes */{file_size}")
+            self.send_header("Accept-Ranges", "bytes")
+            self.end_headers()
+            return
+
+        if byte_range:
+            start, end = byte_range
+            content_length = end - start + 1
+            self.send_response(HTTPStatus.PARTIAL_CONTENT)
+            self.send_header("Content-Range", f"bytes {start}-{end}/{file_size}")
+        else:
+            start, end = 0, file_size - 1
+            content_length = file_size
+            self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Content-Length", str(content_length))
+        self.send_header("Accept-Ranges", "bytes")
         if path.startswith("/outputs/tts_previews/") or path.startswith("/digital_human_images/") or path.startswith("/digital_human_backgrounds/"):
             self.send_header("Cache-Control", "public, max-age=31536000, immutable")
         self.end_headers()
         if not head_only:
-            self.wfile.write(body)
+            with target.open("rb") as f:
+                f.seek(start)
+                remaining = content_length
+                while remaining > 0:
+                    chunk = f.read(min(1024 * 1024, remaining))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    remaining -= len(chunk)
+
+    def parse_byte_range(self, range_header, file_size):
+        if not range_header.startswith("bytes=") or file_size <= 0:
+            return None
+        value = range_header.removeprefix("bytes=").split(",", 1)[0].strip()
+        if "-" not in value:
+            return None
+        start_text, end_text = value.split("-", 1)
+        try:
+            if start_text == "":
+                suffix_length = int(end_text)
+                if suffix_length <= 0:
+                    return None
+                start = max(0, file_size - suffix_length)
+                end = file_size - 1
+            else:
+                start = int(start_text)
+                end = int(end_text) if end_text else file_size - 1
+        except ValueError:
+            return None
+        if start < 0 or end < start or start >= file_size:
+            return None
+        return start, min(end, file_size - 1)
 
 
 def main():
     init_db()
+    load_persisted_runtime_settings()
     atexit.register(cleanup_guest_artifacts)
 
     def shutdown_handler(signum, _frame):

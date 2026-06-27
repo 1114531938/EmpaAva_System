@@ -40,8 +40,10 @@ def main():
         help="Override EmotiVoice speaker id from the YAML config.",
     )
     parser.add_argument("--background", default=None, help="Optional Booth background id")
+    parser.add_argument("--background_image", default=None, help="Optional Booth background image path for composited video export")
     parser.add_argument("--session_id", default=None, help="Optional Booth session id")
     parser.add_argument("--turn_id", default=None, help="Optional Booth turn id")
+    parser.add_argument("--conversation_context", default=None, help="Optional JSON file with prior Booth dialogue turns")
     args = parser.parse_args()
 
     config = load_pipeline_config(args.config)
@@ -80,8 +82,10 @@ def main():
     state.selected_avatar_id = str(args.avatar_id)
     state.selected_tts_speaker_id = state.tts_speaker_id
     state.background = args.background
+    state.background_image = os.path.abspath(args.background_image) if args.background_image else None
     state.session_id = args.session_id
     state.turn_id = args.turn_id
+    state.conversation_context_json = os.path.abspath(args.conversation_context) if args.conversation_context else None
 
     state_path = os.path.join(run_dir, "state.json")
     def save_state(s: PipelineState):

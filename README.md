@@ -164,6 +164,86 @@ embodiment_agent
 State is persisted to `runtime/outputs/<run_id>/state.json` after each stage so
 jobs can be inspected and resumed safely.
 
+## Model and Stage Map
+
+The system is not a single end-to-end model. It is a staged avatar pipeline
+that passes JSON, WAV, NPY/NPZ motion, point-cloud assets, and MP4 artifacts
+between several specialized models and wrappers.
+
+Default model and runtime values are configured in
+`src/avatar_system/pipeline_config.yaml`, with selected runtime overrides coming
+from environment variables and Booth admin settings.
+
+### End-to-End Logic
+
+```text
+Camera/mic input
+  -> ffmpeg audio/video preparation
+  -> ASR + speech emotion recognition
+  -> Task1 empathy/dialogue JSON
+  -> reply text and reply plan
+  -> EmotiVoice phoneme/input preparation
+  -> EmotiVoice speech synthesis
+  -> DEEPTalk audio-to-face motion
+  -> FLAME/Gaussian motion merge
+  -> GaussianAvatar rendering
+  -> optional background compositing
+  -> Booth video playback, history, and export
+```
+
+### Models by Stage
+
+| Stage | Code entry | Default model/tool | Purpose | Main output |
+| --- | --- | --- | --- | --- |
+| Capture and media prep | `apps/booth/server.py`, `InputAgent` | `ffmpeg` | Saves Booth audio/video, extracts WAV, samples lightweight video frames when present. | `input.wav`, optional `video_frames/` |
+| ASR | `integrations/perception/scripts/run_asr.py` | OpenAI Whisper `small` by default (`perception.model: small`) | Transcribes user speech. Language defaults to English in `pipeline_config.yaml`, with script-level auto/detect support. | ASR JSON text |
+| Speech emotion recognition | `integrations/perception/scripts/run_ser.py` | FunASR `AutoModel` with `iic/emotion2vec_plus_seed` | Predicts utterance-level acoustic emotion and normalizes it to task labels such as `neutral`, `happy`, `sad`, `angry`, or `anxious`. | SER JSON emotion |
+| Perception merge | `integrations/perception/scripts/run_perception.py` | Script wrapper over Whisper + emotion2vec | Merges ASR and SER into one perception record. | `<utterance>_perception.json` |
+| Task1 JSON builder | `integrations/perception/scripts/build_task1_input.py` | OpenAI-compatible chat API when enabled; default `LLM_MODEL=liquid/lfm-2.5-1.2b-instruct:free`; fallback rule-based JSON | Converts perception into Task1 empathy schema with speaker emotion, scenario, cause, response goal, and response profile. | Task1 input JSON |
+| Reply generation | `src/avatar_system/tools/task1_tool.py` | LLM reply mode by default when `OPENAI_API_KEY` is set; AvaMERG/local fallback otherwise | Produces the spoken reply text and reply metadata from Task1 context and conversation history. | `reply_plan.json`, Task1 reply JSON |
+| Voice input prep | `src/avatar_system/tools/emotivoice_prepare_tool.py` | EmotiVoice frontend plus `integrations/avamerg/json_to_emotivoice_input.py` | Converts reply JSON/text into EmotiVoice phoneme/content/prompt format. Default speaker id is `6224`. | EmotiVoice `.txt` input |
+| TTS | `integrations/emotivoice/tts_worker.py`, `EmotiVoiceTTSTool` | EmotiVoice `JETSGenerator` checkpoint `g_00140000`; `StyleEncoder`; HiFi-GAN vocoder path inside EmotiVoice | Synthesizes reply speech with the selected speaker id and prompt/style embeddings. | `reply.wav` |
+| Audio-to-motion | `integrations/deeptalk/DEEPTalk/deeptalk_worker.py`, `DEEPTalkTool` | DEEPTalk `DEMOTE_VQVAE_condition` with DEE audio emotion encoder and FLINT motion prior checkpoint | Converts reply WAV into facial-motion parameters. | `deeptalk.npy` |
+| Motion merge | `FlameMergeTool` and `deeptalk_to_demo_flame_param.py` | FLAME template + avatar-specific GaussianAvatar media | Merges DEEPTalk motion into the selected avatar's FLAME/Gaussian parameter sequence; applies jaw/expression tuning from `merge:` config. | `flame_motion.npz` |
+| Viewer prep | `ViewerTool` | GaussianAvatar local viewer assets | Prepares point cloud, motion, audio, and camera/viewer metadata for interactive 3D render mode. | Viewer assets/API payloads |
+| Final video render | `src/avatar_system/export_gaussian_video.py`, `ArtifactExportTool` | GaussianAvatar renderer over selected avatar `point_cloud.ply` and motion NPZ | Renders frame sequence and muxes with reply audio. Runtime defaults: `25fps`, `550x802`. | `final_video.mp4` |
+| Background compositing | `export_gaussian_video.py` with `--background_image` | Dual black/white Gaussian render alpha reconstruction + selected Booth background image | Reconstructs avatar alpha from black/white renders, composites over the selected room background, and preserves dark hair without front-end chroma keying. | Background-composited `final_video.mp4` |
+| Playback/history | `apps/booth/app.js`, `apps/booth/server.py` | Browser video element, optional 3D render view | Plays the exported video, stores conversation rows, serves MP4 with byte-range support, and exports history clips. | Booth playback/history |
+
+### Runtime Model Configuration
+
+Important defaults:
+
+```text
+perception.model                 small
+perception.language              en
+perception.ser_model             iic/emotion2vec_plus_seed
+env.OPENAI_BASE_URL              https://openrouter.ai/api/v1
+env.LLM_MODEL                    liquid/lfm-2.5-1.2b-instruct:free
+tts.speaker_id                   6224
+tts.prompt_mode                  goal
+runtime.video_fps                25
+runtime.video_width              550
+runtime.video_height             802
+```
+
+Useful overrides:
+
+```text
+OPENAI_API_KEY       Enables OpenAI-compatible Task1/reply generation.
+OPENAI_BASE_URL      OpenAI-compatible API base URL.
+LLM_MODEL            Default chat model for Task1/reply helpers.
+TASK1_LLM_MODEL      Reply-generation model override.
+TASK1_REPLY_MODE     Set to avamerg/local/off to avoid LLM reply mode.
+DEPB_NO_LLM=1        Forces non-LLM Booth pipeline behavior.
+DEPB_AVATAR_ID       Default Booth avatar id.
+DEPB_FFMPEG          ffmpeg binary for Booth media handling.
+```
+
+If no API key is configured, the pipeline falls back to local/scripted reply
+generation paths where available. Worker endpoints are enabled by default and
+fall back to subprocess execution when the worker is unavailable.
+
 ## Runtime Artifacts
 
 Each run writes a stable manifest:

@@ -14,6 +14,9 @@ const AUTO_SUBMIT_MAX_RECORDING_MS = 10000;
 const MIN_RECORDING_AUDIO_SECONDS = 0.8;
 const MIN_RECORDING_VIDEO_BYTES = 2048;
 const RENDER_FRAME_TIMEOUT_MS = 20000;
+const AVATAR_MATTE_FEATHER_RADIUS = 9;
+const AVATAR_MATTE_SOFTEN_RADIUS = 2;
+const USE_AVATAR_VIDEO_MATTE = false;
 const DEFAULT_AVATAR_BACKGROUNDS = [
   { id: "study", label: "Study" },
   { id: "bedroom", label: "Bedroom" },
@@ -351,16 +354,19 @@ function avatarSwatchMarkup(item) {
 }
 
 function avatarBackgroundStyle(item) {
-  if (!item?.imageUrl) return "";
-  const separator = String(item.imageUrl).includes("?") ? "&" : "?";
-  const backgroundUrl = escapeHtml(`${item.imageUrl}${separator}v=${encodeURIComponent(item.imageVersion || "1")}`);
+  const imageUrl = String(item?.imageUrl || item?.image_url || "");
+  if (!imageUrl) return "";
+  const imageVersion = item?.imageVersion || item?.image_version || "1";
+  const separator = imageUrl.includes("?") ? "&" : "?";
+  const backgroundUrl = escapeHtml(`${imageUrl}${separator}v=${encodeURIComponent(imageVersion)}`);
   return `--custom-avatar-background: url('${backgroundUrl}');`;
 }
 
 function adminBackgroundPreviewMarkup(item) {
   const imageUrl = versionedImageUrl(item.imageUrl || item.image_url || "", item.imageVersion || item.image_version || "1");
+  const normalizedItem = { ...item, imageUrl };
   return `
-    <span class="admin-background-preview ${imageUrl ? "has-image" : ""}" style="${avatarBackgroundStyle(item)}">
+    <span class="admin-background-preview ${imageUrl ? "has-image" : ""}" style="${avatarBackgroundStyle(normalizedItem)}">
       ${imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(item.label || item.id || "Background")} background" loading="lazy" />` : ""}
     </span>
   `;
@@ -462,6 +468,7 @@ function topbar(title, session, options = {}) {
         <button class="secondary-btn" data-action="room">Conversation</button>
         <button class="secondary-btn" data-action="digital-humans-admin">Digital Humans Management</button>
         <button class="secondary-btn" data-action="admin">User Management</button>
+        <button class="secondary-btn" data-action="api-settings">API Settings</button>
       `
       : "";
   const authButton = isGuestSession(session)
@@ -903,6 +910,9 @@ function bindTopbar() {
   document.querySelectorAll("[data-action='digital-humans-admin']").forEach((button) => {
     button.addEventListener("click", () => navigate("#/digital-humans"));
   });
+  document.querySelectorAll("[data-action='api-settings']").forEach((button) => {
+    button.addEventListener("click", () => navigate("#/api-settings"));
+  });
   document.querySelectorAll("[data-action='room']").forEach((button) => {
     button.addEventListener("click", () => navigate("#/room"));
   });
@@ -1170,6 +1180,9 @@ function bindAvatarVideoReadiness() {
     avatarVideoReadyForListening = false;
     waitingForAvatarPlayback = false;
     avatarVideoLoadError = true;
+    stopAvatarVideoCanvas();
+    const fallbackPerson = document.querySelector(".avatar-person");
+    if (fallbackPerson) fallbackPerson.hidden = false;
     stopAutoCall();
     updateListeningPanelDom();
   };
@@ -1201,6 +1214,7 @@ function stopAvatarVideoCanvas(options = {}) {
 }
 
 function startAvatarVideoCanvas(video) {
+  if (!USE_AVATAR_VIDEO_MATTE) return;
   const canvas = document.querySelector("#avatarVideoCanvas");
   if (!video || !canvas || activeAvatarView !== "video") return;
   if (!video.videoWidth || !video.videoHeight) return;
@@ -1208,8 +1222,8 @@ function startAvatarVideoCanvas(video) {
 
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
-  canvas.hidden = false;
-  video.classList.add("is-canvas-source");
+  canvas.hidden = true;
+  video.classList.remove("is-canvas-source");
   const context = canvas.getContext("2d", { willReadFrequently: true });
   if (!context) return;
 
@@ -1219,10 +1233,17 @@ function startAvatarVideoCanvas(video) {
       return;
     }
     if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const frame = context.getImageData(0, 0, canvas.width, canvas.height);
-      removeConnectedBlackBackdrop(frame);
-      context.putImageData(frame, 0, 0);
+      try {
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const frame = context.getImageData(0, 0, canvas.width, canvas.height);
+        removeConnectedBlackBackdrop(frame);
+        context.putImageData(frame, 0, 0);
+        canvas.hidden = false;
+        video.classList.add("is-canvas-source");
+      } catch {
+        stopAvatarVideoCanvas();
+        return;
+      }
     }
     avatarVideoCanvasRaf = requestAnimationFrame(drawFrame);
   };
@@ -1241,7 +1262,13 @@ function removeConnectedBlackBackdrop(frame) {
     if (pixelIndex < 0 || pixelIndex >= total || backdrop[pixelIndex]) return;
     const byteIndex = pixelIndex * 4;
     if (!isAvatarBackdropPixel(pixels, byteIndex, 24)) return;
-    if (headProtection && isInsideAvatarHeadProtection(pixelIndex, width, headProtection) && pixelLuma(pixels, byteIndex) > 14) return;
+    if (
+      headProtection &&
+      isInsideAvatarHeadProtection(pixelIndex, width, headProtection) &&
+      isProtectedAvatarForegroundPixel(pixels, byteIndex)
+    ) {
+      return;
+    }
     backdrop[pixelIndex] = 1;
     stack[stackSize] = pixelIndex;
     stackSize += 1;
@@ -1274,23 +1301,36 @@ function removeConnectedBlackBackdrop(frame) {
   for (let pixelIndex = 0; pixelIndex < total; pixelIndex += 1) {
     if (backdrop[pixelIndex]) continue;
     const byteIndex = pixelIndex * 4;
-    if (headProtection && isInsideAvatarHeadProtection(pixelIndex, width, headProtection) && pixelLuma(pixels, byteIndex) > 18) continue;
+    const protectedHead = headProtection && isInsideAvatarHeadProtection(pixelIndex, width, headProtection);
+    if (protectedHead && isProtectedAvatarForegroundPixel(pixels, byteIndex)) continue;
     if (!isAvatarBackdropPixel(pixels, byteIndex, 44)) continue;
     const x = pixelIndex % width;
-    const touchesBackdrop =
-      (x > 0 && backdrop[pixelIndex - 1]) ||
-      (x < width - 1 && backdrop[pixelIndex + 1]) ||
-      (pixelIndex >= width && backdrop[pixelIndex - width]) ||
-      (pixelIndex < total - width && backdrop[pixelIndex + width]);
+    const y = (pixelIndex - x) / width;
+    const touchesBackdrop = hasBackdropWithinRadius(backdrop, width, height, x, y, 3);
     if (!touchesBackdrop) continue;
-    const r = pixels[byteIndex];
-    const g = pixels[byteIndex + 1];
-    const b = pixels[byteIndex + 2];
-    const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-    pixels[byteIndex + 3] = Math.max(96, Math.min(255, Math.round(((luma - 42) / 34) * 255)));
+    const luma = pixelLuma(pixels, byteIndex);
+    const edgeAlpha = Math.round(((luma - 24) / 54) * 255);
+    pixels[byteIndex + 3] = Math.max(8, Math.min(protectedHead ? 156 : 190, edgeAlpha));
   }
 
   featherAvatarMatte(pixels, width, height, backdrop, headProtection);
+}
+
+function hasBackdropWithinRadius(backdrop, width, height, cx, cy, radius) {
+  const minY = Math.max(0, cy - radius);
+  const maxY = Math.min(height - 1, cy + radius);
+  const minX = Math.max(0, cx - radius);
+  const maxX = Math.min(width - 1, cx + radius);
+  const radiusSquared = radius * radius;
+  for (let y = minY; y <= maxY; y += 1) {
+    const dy = y - cy;
+    for (let x = minX; x <= maxX; x += 1) {
+      const dx = x - cx;
+      if (dx * dx + dy * dy > radiusSquared) continue;
+      if (backdrop[y * width + x]) return true;
+    }
+  }
+  return false;
 }
 
 function isAvatarBackdropPixel(pixels, index, lumaLimit) {
@@ -1300,7 +1340,8 @@ function isAvatarBackdropPixel(pixels, index, lumaLimit) {
   const luma = pixelLuma(pixels, index);
   const channelSpread = Math.max(r, g, b) - Math.min(r, g, b);
   const coolOrNeutralBlack = b >= r - 2 && b >= g - 8 && channelSpread <= 18;
-  return luma < lumaLimit && coolOrNeutralBlack;
+  const neutralGrayMatte = luma >= 28 && luma < 78 && channelSpread <= 14;
+  return (luma < lumaLimit && coolOrNeutralBlack) || neutralGrayMatte;
 }
 
 function pixelLuma(pixels, index) {
@@ -1335,12 +1376,12 @@ function estimateAvatarHeadProtection(pixels, width, height) {
   const skinWidth = right - left;
   const skinHeight = bottom - top;
   const cx = (left + right) / 2;
-  const cy = top + skinHeight * 0.44;
+  const cy = top + skinHeight * 0.3;
   return {
     cx,
     cy,
-    rx: Math.max(skinWidth * 0.78, width * 0.18),
-    ry: Math.max(skinHeight * 0.76, height * 0.24),
+    rx: Math.max(skinWidth * 0.9, width * 0.2),
+    ry: Math.max(skinHeight * 0.98, height * 0.28),
   };
 }
 
@@ -1350,6 +1391,23 @@ function isAvatarSkinPixel(pixels, index) {
   const b = pixels[index + 2];
   const luma = pixelLuma(pixels, index);
   return luma > 62 && luma < 230 && r > 72 && g > 42 && b > 28 && r > b + 12 && r >= g - 8 && r - Math.min(g, b) > 16;
+}
+
+function isAvatarHairPixel(pixels, index) {
+  const r = pixels[index];
+  const g = pixels[index + 1];
+  const b = pixels[index + 2];
+  const luma = pixelLuma(pixels, index);
+  const channelSpread = Math.max(r, g, b) - Math.min(r, g, b);
+  const flatBlackMatte = luma < 26 && channelSpread <= 14 && b >= r - 4 && b >= g - 10;
+  if (flatBlackMatte) return false;
+  const darkHair = luma >= 18 && luma < 42 && channelSpread > 4;
+  const texturedDarkHair = luma >= 42 && luma < 78 && channelSpread > 10 && b <= Math.max(r, g) + 20;
+  return darkHair || texturedDarkHair;
+}
+
+function isProtectedAvatarForegroundPixel(pixels, index) {
+  return isAvatarSkinPixel(pixels, index) || isAvatarHairPixel(pixels, index);
 }
 
 function isInsideAvatarHeadProtection(pixelIndex, width, protection) {
@@ -1362,49 +1420,147 @@ function isInsideAvatarHeadProtection(pixelIndex, width, protection) {
 
 function featherAvatarMatte(pixels, width, height, backdrop, headProtection) {
   const total = width * height;
+  const edgeDistance = estimateMatteEdgeDistance(backdrop, width, height, AVATAR_MATTE_FEATHER_RADIUS);
   const nextAlpha = new Uint8ClampedArray(total);
 
   for (let pixelIndex = 0; pixelIndex < total; pixelIndex += 1) {
     nextAlpha[pixelIndex] = pixels[pixelIndex * 4 + 3];
   }
 
-  for (let y = 1; y < height - 1; y += 1) {
-    for (let x = 1; x < width - 1; x += 1) {
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
       const pixelIndex = y * width + x;
       const byteIndex = pixelIndex * 4;
       if (pixels[byteIndex + 3] === 0) continue;
+      const distance = edgeDistance[pixelIndex];
+      if (distance === 0 || distance > AVATAR_MATTE_FEATHER_RADIUS) continue;
 
-      const alphaSamples =
-        pixels[(pixelIndex - 1) * 4 + 3] +
-        pixels[(pixelIndex + 1) * 4 + 3] +
-        pixels[(pixelIndex - width) * 4 + 3] +
-        pixels[(pixelIndex + width) * 4 + 3] +
-        pixels[(pixelIndex - width - 1) * 4 + 3] +
-        pixels[(pixelIndex - width + 1) * 4 + 3] +
-        pixels[(pixelIndex + width - 1) * 4 + 3] +
-        pixels[(pixelIndex + width + 1) * 4 + 3];
-      if (alphaSamples === 8 * 255) continue;
+      const luma = pixelLuma(pixels, byteIndex);
+      const protectedHair = headProtection && isInsideAvatarHeadProtection(pixelIndex, width, headProtection) && isAvatarHairPixel(pixels, byteIndex);
+      const neutralDarkEdge = isNeutralDarkEdgePixel(pixels, byteIndex);
+      const t = smoothstep(0, 1, (distance - 0.35) / (AVATAR_MATTE_FEATHER_RADIUS - 0.35));
+      const minAlpha = protectedHair ? 96 : neutralDarkEdge ? 8 : 42;
+      let matteAlpha = Math.round(minAlpha + (255 - minAlpha) * t);
 
-      const touchesBackdrop =
-        backdrop[pixelIndex - 1] ||
-        backdrop[pixelIndex + 1] ||
-        backdrop[pixelIndex - width] ||
-        backdrop[pixelIndex + width] ||
-        backdrop[pixelIndex - width - 1] ||
-        backdrop[pixelIndex - width + 1] ||
-        backdrop[pixelIndex + width - 1] ||
-        backdrop[pixelIndex + width + 1];
-      if (!touchesBackdrop) continue;
-
-      const protectedHair = headProtection && isInsideAvatarHeadProtection(pixelIndex, width, headProtection) && pixelLuma(pixels, byteIndex) > 28;
-      const matteAlpha = Math.round((pixels[byteIndex + 3] * 4 + alphaSamples) / 12);
-      nextAlpha[pixelIndex] = protectedHair ? Math.max(210, matteAlpha) : Math.max(132, matteAlpha);
+      if (neutralDarkEdge && distance <= 3) {
+        matteAlpha = Math.min(matteAlpha, Math.round(12 + 34 * distance));
+      }
+      if (protectedHair && distance <= 2) {
+        matteAlpha = Math.min(matteAlpha, Math.round(72 + 42 * distance));
+      }
+      nextAlpha[pixelIndex] = Math.min(nextAlpha[pixelIndex], matteAlpha);
     }
   }
+
+  softenAvatarEdgeAlpha(nextAlpha, width, height, edgeDistance, headProtection, pixels);
 
   for (let pixelIndex = 0; pixelIndex < total; pixelIndex += 1) {
     pixels[pixelIndex * 4 + 3] = nextAlpha[pixelIndex];
   }
+}
+
+function softenAvatarEdgeAlpha(alpha, width, height, edgeDistance, headProtection, pixels) {
+  const total = width * height;
+  const softened = new Uint8ClampedArray(alpha);
+  const radius = AVATAR_MATTE_SOFTEN_RADIUS;
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const pixelIndex = y * width + x;
+      if (alpha[pixelIndex] === 0) continue;
+      const distance = edgeDistance[pixelIndex];
+      if (distance === 0 || distance > AVATAR_MATTE_FEATHER_RADIUS + 1) continue;
+
+      let sum = 0;
+      let weightSum = 0;
+      for (let oy = -radius; oy <= radius; oy += 1) {
+        const sy = y + oy;
+        if (sy < 0 || sy >= height) continue;
+        for (let ox = -radius; ox <= radius; ox += 1) {
+          const sx = x + ox;
+          if (sx < 0 || sx >= width) continue;
+          const sampleIndex = sy * width + sx;
+          const weight = ox === 0 && oy === 0 ? 4 : Math.abs(ox) + Math.abs(oy) === 1 ? 2 : 1;
+          sum += alpha[sampleIndex] * weight;
+          weightSum += weight;
+        }
+      }
+
+      const byteIndex = pixelIndex * 4;
+      const luma = pixelLuma(pixels, byteIndex);
+      const protectedHair = headProtection && isInsideAvatarHeadProtection(pixelIndex, width, headProtection) && isAvatarHairPixel(pixels, byteIndex);
+      const blurredAlpha = Math.round(sum / weightSum);
+      const blend = protectedHair ? 0.5 : 0.75;
+      softened[pixelIndex] = Math.round(alpha[pixelIndex] * (1 - blend) + blurredAlpha * blend);
+    }
+  }
+
+  for (let pixelIndex = 0; pixelIndex < total; pixelIndex += 1) {
+    alpha[pixelIndex] = softened[pixelIndex];
+  }
+}
+
+function estimateMatteEdgeDistance(backdrop, width, height, radius) {
+  const total = width * height;
+  const distance = new Uint8Array(total);
+  const queue = new Int32Array(total);
+  let readIndex = 0;
+  let writeIndex = 0;
+
+  distance.fill(255);
+  for (let pixelIndex = 0; pixelIndex < total; pixelIndex += 1) {
+    if (!backdrop[pixelIndex]) continue;
+    distance[pixelIndex] = 0;
+    queue[writeIndex] = pixelIndex;
+    writeIndex += 1;
+  }
+
+  while (readIndex < writeIndex) {
+    const current = queue[readIndex];
+    readIndex += 1;
+    const currentDistance = distance[current];
+    if (currentDistance >= radius) continue;
+    const nextDistance = currentDistance + 1;
+    const x = current % width;
+    const y = (current - x) / width;
+
+    if (x > 0 && distance[current - 1] > nextDistance) {
+      distance[current - 1] = nextDistance;
+      queue[writeIndex] = current - 1;
+      writeIndex += 1;
+    }
+    if (x < width - 1 && distance[current + 1] > nextDistance) {
+      distance[current + 1] = nextDistance;
+      queue[writeIndex] = current + 1;
+      writeIndex += 1;
+    }
+    if (y > 0 && distance[current - width] > nextDistance) {
+      distance[current - width] = nextDistance;
+      queue[writeIndex] = current - width;
+      writeIndex += 1;
+    }
+    if (y < height - 1 && distance[current + width] > nextDistance) {
+      distance[current + width] = nextDistance;
+      queue[writeIndex] = current + width;
+      writeIndex += 1;
+    }
+  }
+
+  return distance;
+}
+
+function isNeutralDarkEdgePixel(pixels, index) {
+  const r = pixels[index];
+  const g = pixels[index + 1];
+  const b = pixels[index + 2];
+  const luma = pixelLuma(pixels, index);
+  const channelSpread = Math.max(r, g, b) - Math.min(r, g, b);
+  return luma < 56 && channelSpread < 22 && b >= r - 4 && b >= g - 10;
+}
+
+function smoothstep(edge0, edge1, value) {
+  const t = Math.max(0, Math.min(1, (value - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
 }
 
 function updateLocalVideo() {
@@ -3058,6 +3214,80 @@ async function renderDigitalHumansAdmin() {
   bindBackgroundAdmin();
 }
 
+async function renderApiSettings() {
+  const session = requireAuth();
+  if (!session) return;
+  if (session.role !== "admin") {
+    navigate("#/room");
+    return;
+  }
+
+  let settings = {
+    has_openai_api_key: false,
+    openai_key_preview: "",
+    openai_base_url: "https://openrouter.ai/api/v1",
+    llm_model: "liquid/lfm-2.5-1.2b-instruct:free",
+    llm_enabled: false,
+  };
+  let loadError = "";
+  try {
+    settings = await apiFetch("/api/settings");
+  } catch (err) {
+    loadError = err.message;
+  }
+
+  document.querySelector("#app").innerHTML = `
+    <main class="page">
+      ${topbar("API Settings", session)}
+      <section class="admin-page-stack">
+        <section class="settings-layout">
+          <form class="admin-form settings-form" id="apiSettingsForm">
+            <h2>OpenAI API</h2>
+            <div class="settings-status ${settings.llm_enabled ? "is-on" : "is-off"}">
+              <strong>${settings.llm_enabled ? "LLM conversation enabled" : "LLM conversation disabled"}</strong>
+              <span>${settings.has_openai_api_key ? `Key: ${escapeHtml(settings.openai_key_preview || "configured")}` : "No OPENAI_API_KEY configured"}</span>
+            </div>
+            <div class="field">
+              <label for="openaiApiKey">OPENAI_API_KEY</label>
+              <input id="openaiApiKey" name="openai_api_key" type="password" autocomplete="off" placeholder="${settings.has_openai_api_key ? "Leave blank to keep existing key" : "Paste API key"}" />
+            </div>
+            <label class="checkbox-row">
+              <input id="clearOpenaiApiKey" name="clear_openai_api_key" type="checkbox" />
+              <span>Clear current API key</span>
+            </label>
+            <div class="field">
+              <label for="openaiBaseUrl">OPENAI_BASE_URL</label>
+              <input id="openaiBaseUrl" name="openai_base_url" value="${escapeHtml(settings.openai_base_url || "https://openrouter.ai/api/v1")}" />
+            </div>
+            <div class="field">
+              <label for="llmModel">LLM_MODEL</label>
+              <input id="llmModel" name="llm_model" value="${escapeHtml(settings.llm_model || "liquid/lfm-2.5-1.2b-instruct:free")}" />
+            </div>
+            <button class="primary-btn" type="submit">Save API Settings</button>
+            <p class="error" id="apiSettingsError">${escapeHtml(loadError)}</p>
+            <p class="hint">Saved values are applied to the server process and passed to newly started avatar pipeline jobs.</p>
+          </form>
+          <article class="admin-panel settings-help">
+            <div class="pane-head">
+              <div class="pane-title">
+                <strong>Conversation Behavior</strong>
+                <span>Runtime status</span>
+              </div>
+            </div>
+            <div class="settings-help-body">
+              <p>When a valid key is configured, new avatar replies use the LLM dialogue path and avoid the fixed fallback routine.</p>
+              <p>Existing running jobs keep the environment they started with. Start a new conversation turn after saving.</p>
+            </div>
+          </article>
+        </section>
+      </section>
+    </main>
+  `;
+
+  bindTopbar();
+  bindApiSettings();
+}
+
 function renderBackgroundManagement(items) {
   const rows = (items.length ? items : DEFAULT_AVATAR_BACKGROUNDS)
     .map(
@@ -3249,6 +3479,39 @@ function bindUserAdmin() {
         alert(err.message);
       }
     });
+  });
+}
+
+function bindApiSettings() {
+  const form = document.querySelector("#apiSettingsForm");
+  if (!form) return;
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const formData = new FormData(form);
+    const error = document.querySelector("#apiSettingsError");
+    const button = form.querySelector("button[type='submit']");
+    const payload = {
+      openai_api_key: String(formData.get("openai_api_key") || "").trim(),
+      clear_openai_api_key: Boolean(formData.get("clear_openai_api_key")),
+      openai_base_url: String(formData.get("openai_base_url") || "").trim(),
+      llm_model: String(formData.get("llm_model") || "").trim(),
+    };
+
+    if (error) error.textContent = "";
+    button.disabled = true;
+    button.textContent = "Saving...";
+    try {
+      await apiFetch("/api/settings", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      await renderApiSettings();
+    } catch (err) {
+      if (error) error.textContent = err.message;
+    } finally {
+      button.disabled = false;
+      button.textContent = "Save API Settings";
+    }
   });
 }
 
@@ -3474,7 +3737,7 @@ function cssEscape(value) {
 
 async function render() {
   const route = location.hash || "#/";
-  if (route === "#/room" || route === "#/history" || route === "#/admin" || route === "#/digital-humans") {
+  if (route === "#/room" || route === "#/history" || route === "#/admin" || route === "#/digital-humans" || route === "#/api-settings") {
     await hydrateSession();
   }
   if (route === "#/room") {
@@ -3501,6 +3764,10 @@ async function render() {
   }
   if (route === "#/digital-humans") {
     await renderDigitalHumansAdmin();
+    return;
+  }
+  if (route === "#/api-settings") {
+    await renderApiSettings();
     return;
   }
   renderLogin();

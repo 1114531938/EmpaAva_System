@@ -32,8 +32,10 @@ class PipelineState:
     selected_avatar_id: Optional[str] = None
     selected_tts_speaker_id: Optional[str] = None
     background: Optional[str] = None
+    background_image: Optional[str] = None
     session_id: Optional[str] = None
     turn_id: Optional[str] = None
+    conversation_context_json: Optional[str] = None
 
     task1_reply_json: Optional[str] = None
     reply_text: Optional[str] = None

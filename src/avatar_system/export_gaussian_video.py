@@ -132,6 +132,27 @@ def prepare_camera_from_three(width: int, height: int, camera_json: Path):
     return prepare_camera_from_three_payload(width, height, payload)
 
 
+def load_cover_background(path: Path, width: int, height: int, device: str = "cuda") -> torch.Tensor:
+    image = Image.open(path).convert("RGB")
+    scale = max(width / image.width, height / image.height)
+    next_size = (max(width, int(round(image.width * scale))), max(height, int(round(image.height * scale))))
+    resampling = getattr(Image, "Resampling", Image)
+    image = image.resize(next_size, resampling.LANCZOS)
+    left = (image.width - width) // 2
+    top = (image.height - height) // 2
+    image = image.crop((left, top, left + width, top + height))
+    array = np.asarray(image, dtype=np.float32) / 255.0
+    return torch.from_numpy(array).to(device=device).permute(2, 0, 1).contiguous()
+
+
+def composite_gaussian_over_background(image_black: torch.Tensor, image_white: torch.Tensor, background_chw: torch.Tensor) -> torch.Tensor:
+    background_delta = (image_white - image_black).clamp(0.0, 1.0)
+    alpha = (1.0 - background_delta.mean(dim=0, keepdim=True)).clamp(0.0, 1.0)
+    safe_alpha = alpha.clamp(min=1.0 / 255.0)
+    foreground = (image_black / safe_alpha).clamp(0.0, 1.0)
+    return (foreground * alpha + background_chw * (1.0 - alpha)).clamp(0.0, 1.0)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Export GaussianAvatar motion to mp4")
     parser.add_argument("--gaussian_root", required=True)
@@ -167,6 +188,11 @@ def main() -> None:
         "--camera_json",
         default=None,
         help="Optional Three.js camera JSON with position/target/up/fov/center_offset.",
+    )
+    parser.add_argument(
+        "--background_image",
+        default=None,
+        help="Optional image to composite behind the Gaussian render using black/white background alpha reconstruction.",
     )
     parser.add_argument(
         "--no_sync_to_audio",
@@ -249,6 +275,14 @@ def main() -> None:
             load_micro_expression=not args.disable_micro_expression,
         )
         background = torch.tensor([0.04, 0.05, 0.07], dtype=torch.float32, device="cuda")
+        background_black = torch.zeros(3, dtype=torch.float32, device="cuda")
+        background_white = torch.ones(3, dtype=torch.float32, device="cuda")
+        background_image = None
+        if args.background_image:
+            background_path = Path(args.background_image).resolve()
+            if not background_path.exists():
+                raise FileNotFoundError(f"background_image not found: {background_path}")
+            background_image = load_cover_background(background_path, args.width, args.height)
         if args.camera_json:
             cam = prepare_camera_from_three(args.width, args.height, Path(args.camera_json).resolve())
         else:
@@ -266,7 +300,12 @@ def main() -> None:
                 gaussians.select_mesh_by_timestep(frame_idx)
             image_hwc = None
             if args.render_mode in {"gaussian", "overlay"}:
-                image = render(cam, gaussians, pipeline, background)["render"]
+                if background_image is not None and args.render_mode == "gaussian":
+                    image_black = render(cam, gaussians, pipeline, background_black)["render"]
+                    image_white = render(cam, gaussians, pipeline, background_white)["render"]
+                    image = composite_gaussian_over_background(image_black, image_white, background_image)
+                else:
+                    image = render(cam, gaussians, pipeline, background)["render"]
                 image_hwc = image.permute(1, 2, 0).contiguous()
             if args.render_mode in {"white_mesh", "overlay"}:
                 if gaussians.binding is None:

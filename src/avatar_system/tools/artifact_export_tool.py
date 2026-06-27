@@ -53,8 +53,9 @@ class ArtifactExportTool:
             "audio_filter",
             "highpass=f=70,lowpass=f=7600,loudnorm=I=-16:LRA=11:TP=-1.5,aresample=48000",
         )
-
         q = shlex.quote
+        background_image = getattr(state, "background_image", None)
+        background_arg = f" --background_image {q(background_image)}" if background_image and os.path.exists(background_image) else ""
         base_cmd = f"""
         cd {q(gaussian_root)}
         {q(gaussian_python)} {q(exporter_py)} \
@@ -70,7 +71,7 @@ class ArtifactExportTool:
           --fps {q(str(runtime.get("video_fps", 25)))} \
           --width {q(str(runtime.get("video_width", 550)))} \
           --height {q(str(runtime.get("video_height", 802)))} \
-          --ffmpeg {q(ffmpeg)}
+          --ffmpeg {q(ffmpeg)}{background_arg}
         """
         state.video_export_command = build_apptainer_exec_command(base_cmd, container_image)
 

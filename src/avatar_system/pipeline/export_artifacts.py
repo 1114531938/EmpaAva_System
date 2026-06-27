@@ -35,6 +35,7 @@ def main() -> None:
         "artifact_enhanced_reply_wav": None,
         "output_video": None,
         "output_white_model_video": None,
+        "background_image": None,
         "video_export_command": None,
         "video_export_error": None,
     }
@@ -60,6 +61,7 @@ def main() -> None:
             "artifact_flame_motion_npz": state.artifact_flame_motion_npz,
             "output_video": state.output_video,
             "output_white_model_video": state.output_white_model_video,
+            "background_image": state.background_image,
             "video_export_command": state.video_export_command,
             "video_export_error": state.video_export_error,
             "run_dir": state.run_dir,
