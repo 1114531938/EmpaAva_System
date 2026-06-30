@@ -517,6 +517,9 @@ PYTHONPATH=src "$AVATAR_SYSTEM_ROOT/runtime/cache/venvs/deeptalk/bin/python" -m 
   --config "$AVATAR_SYSTEM_ROOT/src/avatar_system/pipeline_config.yaml"
 ```
 
+The sample WAV above is an ignored local demo asset. If it is not restored on
+the new server, replace `--input_wav` with any valid local WAV file.
+
 Successful runs write:
 
 ```text
