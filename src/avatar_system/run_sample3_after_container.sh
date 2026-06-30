@@ -17,7 +17,7 @@ export HF_HOME="$ROOT/runtime/cache/hf"
 export XDG_CACHE_HOME="$ROOT/runtime/cache/xdg"
 export MODELSCOPE_CACHE="$ROOT/runtime/cache/modelscope"
 export OPENAI_BASE_URL="${OPENAI_BASE_URL:-https://openrouter.ai/api/v1}"
-export LLM_MODEL="${LLM_MODEL:-openai/gpt-oss-120b:free}"
+export LLM_MODEL="${LLM_MODEL:-liquid/lfm-2.5-1.2b-instruct:free}"
 
 mkdir -p "$HF_HOME" "$XDG_CACHE_HOME" "$MODELSCOPE_CACHE"
 

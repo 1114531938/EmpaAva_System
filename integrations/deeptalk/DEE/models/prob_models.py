@@ -8,6 +8,8 @@ from funasr import AutoModel
 import torch.nn.functional as F
 import copy
 import einops
+import os
+from pathlib import Path
 # pip install fairseq 
 import fairseq 
 from dataclasses import dataclass
@@ -18,6 +20,22 @@ import sys
 from DEE.utils.masks import init_alibi_biased_mask_future
 from DEE.utils.pcme import MCSoftContrastiveLoss
 from DEE.utils.loss import ClosedFormSampledDistanceLoss
+
+EMOTION2VEC_MODEL_ID = "iic/emotion2vec_base_finetuned"
+
+
+def _emotion2vec_model_source():
+    cache_roots = []
+    if os.environ.get("MODELSCOPE_CACHE"):
+        cache_roots.append(Path(os.environ["MODELSCOPE_CACHE"]))
+    cache_roots.append(Path(__file__).resolve().parents[4] / "runtime" / "cache" / "modelscope")
+
+    for cache_root in cache_roots:
+        model_dir = cache_root / "iic" / "emotion2vec_base_finetuned"
+        if (model_dir / "configuration.json").exists():
+            return str(model_dir)
+    return EMOTION2VEC_MODEL_ID
+
 
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_seq_len=512):
@@ -94,7 +112,11 @@ class ProbAudioEncoder(nn.Module):
             # if we are inputting audio and using embeddings, freeze embedding_model
             if args.use_finetuned_emo2vec:
                 # finetuned_model = AutoModel(model="iic/emotion2vec_base_finetuned", model_revision="v2.0.4")
-                finetuned_model = AutoModel(model="iic/emotion2vec_base_finetuned")
+                finetuned_model = AutoModel(
+                    model=_emotion2vec_model_source(),
+                    check_latest=False,
+                    disable_update=True,
+                )
                 finetuned_model_state_dict = finetuned_model.model.state_dict()
                 pt_model_state_dict = self.embedding_model.state_dict()
                 new_checkpoint = {k: v for k, v in finetuned_model_state_dict.items() if k in list(pt_model_state_dict.keys())}

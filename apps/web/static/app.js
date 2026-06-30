@@ -198,7 +198,7 @@ async function loadSettings() {
   if (!response.ok) return;
   const settings = await response.json();
   els.baseUrl.value = settings.openai_base_url || "https://openrouter.ai/api/v1";
-  els.modelName.value = settings.llm_model || "openai/gpt-oss-120b:free";
+  els.modelName.value = settings.llm_model || "liquid/lfm-2.5-1.2b-instruct:free";
   els.keyStatus.textContent = settings.has_openai_api_key
     ? `Key configured (${settings.openai_key_preview})`
     : "Key missing";

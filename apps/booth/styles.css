@@ -1398,6 +1398,13 @@ button {
   min-width: 0;
 }
 
+.settings-layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 520px) minmax(0, 1fr);
+  gap: 18px;
+  min-width: 0;
+}
+
 .admin-form {
   padding: 20px;
   align-self: start;
@@ -1411,6 +1418,59 @@ button {
   display: grid;
   gap: 18px;
   min-width: 0;
+}
+
+.settings-form {
+  max-width: 520px;
+}
+
+.settings-status {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 16px;
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: rgba(13, 17, 23, 0.42);
+}
+
+.settings-status strong {
+  font-size: 14px;
+}
+
+.settings-status span,
+.settings-help-body {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.settings-status.is-on {
+  border-color: rgba(50, 208, 164, 0.45);
+  background: rgba(50, 208, 164, 0.1);
+}
+
+.settings-status.is-off {
+  border-color: rgba(255, 184, 77, 0.38);
+  background: rgba(255, 184, 77, 0.08);
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.checkbox-row input {
+  width: 16px;
+  height: 16px;
+}
+
+.settings-help {
+  padding: 18px;
 }
 
 .table-wrap {

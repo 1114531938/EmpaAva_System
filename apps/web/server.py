@@ -60,7 +60,7 @@ db_lock = threading.Lock()
 runtime_settings: dict[str, str] = {
     "OPENAI_API_KEY": os.environ.get("OPENAI_API_KEY", ""),
     "OPENAI_BASE_URL": os.environ.get("OPENAI_BASE_URL", "https://openrouter.ai/api/v1"),
-    "LLM_MODEL": os.environ.get("LLM_MODEL", "openai/gpt-oss-120b:free"),
+    "LLM_MODEL": os.environ.get("LLM_MODEL", "liquid/lfm-2.5-1.2b-instruct:free"),
 }
 
 
@@ -224,7 +224,7 @@ def _clear_session_cookie(response: JSONResponse) -> None:
 class RuntimeSettings(BaseModel):
     openai_api_key: str = ""
     openai_base_url: str = "https://openrouter.ai/api/v1"
-    llm_model: str = "openai/gpt-oss-120b:free"
+    llm_model: str = "liquid/lfm-2.5-1.2b-instruct:free"
 
 
 class AuthRequest(BaseModel):
@@ -686,6 +686,7 @@ def _sha256_file(path: Path) -> str:
 def _cache_key(
     *,
     audio_sha256: str,
+    conversation_context_sha256: str = "",
     avatar_id: str,
     no_llm: bool,
     no_video_export: bool,
@@ -694,8 +695,9 @@ def _cache_key(
     settings: dict[str, str],
 ) -> str:
     cache_obj = {
-        "schema": 2,
+        "schema": 3,
         "audio_sha256": audio_sha256,
+        "conversation_context_sha256": conversation_context_sha256,
         "avatar_id": str(avatar_id),
         "no_llm": bool(no_llm),
         "no_video_export": bool(no_video_export),
@@ -1253,7 +1255,7 @@ def set_settings(settings: RuntimeSettings) -> JSONResponse:
         if settings.openai_api_key.strip():
             runtime_settings["OPENAI_API_KEY"] = settings.openai_api_key.strip()
         runtime_settings["OPENAI_BASE_URL"] = settings.openai_base_url.strip() or "https://openrouter.ai/api/v1"
-        runtime_settings["LLM_MODEL"] = settings.llm_model.strip() or "openai/gpt-oss-120b:free"
+        runtime_settings["LLM_MODEL"] = settings.llm_model.strip() or "liquid/lfm-2.5-1.2b-instruct:free"
     return get_settings()
 
 
@@ -1355,8 +1357,11 @@ def _start_pipeline_job(
     _prune_output_runs(keep=5, preserve_uploads={input_wav})
 
     audio_sha256 = _sha256_file(input_wav)
+    conversation_context_path = Path(str(booth_context.get("conversation_context_json", ""))) if booth_context and booth_context.get("conversation_context_json") else None
+    conversation_context_sha256 = _sha256_file(conversation_context_path) if conversation_context_path and conversation_context_path.exists() else ""
     cache_key = _cache_key(
         audio_sha256=audio_sha256,
+        conversation_context_sha256=conversation_context_sha256,
         avatar_id=str(avatar_id),
         no_llm=bool(no_llm),
         no_video_export=bool(no_video_export),
@@ -1419,6 +1424,8 @@ def _start_pipeline_job(
             cmd.extend(["--session_id", str(booth_context["session_id"])])
         if booth_context.get("turn_id"):
             cmd.extend(["--turn_id", str(booth_context["turn_id"])])
+        if booth_context.get("conversation_context_json"):
+            cmd.extend(["--conversation_context", str(booth_context["conversation_context_json"])])
 
     env = os.environ.copy()
     env.setdefault("HF_HOME", str(ROOT / "cache" / "hf"))
@@ -1427,7 +1434,7 @@ def _start_pipeline_job(
     env.setdefault("NLTK_DATA", str(ROOT / "cache" / "nltk_data"))
     env["OPENAI_API_KEY"] = active_settings.get("OPENAI_API_KEY", "")
     env["OPENAI_BASE_URL"] = active_settings.get("OPENAI_BASE_URL", "https://openrouter.ai/api/v1")
-    env["LLM_MODEL"] = active_settings.get("LLM_MODEL", "openai/gpt-oss-120b:free")
+    env["LLM_MODEL"] = active_settings.get("LLM_MODEL", "liquid/lfm-2.5-1.2b-instruct:free")
 
     with web_log.open("w", encoding="utf-8") as log:
         log.write("$ " + " ".join(cmd) + "\n\n")
@@ -1518,6 +1525,58 @@ def _booth_session_payload(row: sqlite3.Row, include_turns: bool = False) -> dic
             ).fetchall()
         payload["turns"] = [_booth_turn_payload(turn) for turn in turns]
     return payload
+
+
+def _find_text_value(obj: Any, keys: set[str]) -> str:
+    if isinstance(obj, dict):
+        for key, value in obj.items():
+            if key in keys and isinstance(value, (str, int, float)):
+                text = str(value).strip()
+                if text:
+                    return text
+        for value in obj.values():
+            found = _find_text_value(value, keys)
+            if found:
+                return found
+    elif isinstance(obj, list):
+        for item in obj:
+            found = _find_text_value(item, keys)
+            if found:
+                return found
+    return ""
+
+
+def _manifest_user_utterance(manifest: dict[str, Any]) -> str:
+    task1_path = manifest.get("task1_input_json") if isinstance(manifest, dict) else None
+    if not task1_path:
+        return ""
+    try:
+        task1_obj = json.loads(Path(task1_path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, TypeError):
+        return ""
+    return _find_text_value(task1_obj, {"utterance", "text", "text_raw"})
+
+
+def _booth_conversation_context(session_id: str, user_id: int, limit: int = 6) -> dict[str, Any]:
+    with db_lock, _db() as conn:
+        rows = conn.execute(
+            """
+            SELECT * FROM booth_turns
+            WHERE session_id = ? AND user_id = ? AND manifest_json IS NOT NULL
+            ORDER BY created_at ASC
+            """,
+            (session_id, user_id),
+        ).fetchall()
+
+    turns: list[dict[str, str]] = []
+    for row in rows:
+        manifest = _parse_json_field(row["manifest_json"], {})
+        user_text = _manifest_user_utterance(manifest)
+        assistant_text = str(row["reply_text"] or manifest.get("reply_text") or "").strip()
+        if user_text or assistant_text:
+            turns.append({"user": user_text, "assistant": assistant_text})
+
+    return {"schema": 1, "session_id": session_id, "turns": turns[-limit:]}
 
 
 def _require_booth_session(session_id: str, user_id: int) -> sqlite3.Row:
@@ -1791,6 +1850,9 @@ async def create_booth_turn(
     if not input_wav.exists() or input_wav.stat().st_size == 0:
         raise HTTPException(status_code=400, detail="No usable microphone audio was captured.")
     frame_paths = _extract_video_frames(input_video_path, turn_dir / "video_frames") if input_video_path else []
+    conversation_context = _booth_conversation_context(session_id, int(user["id"]))
+    conversation_context_path = turn_dir / "conversation_context.json"
+    conversation_context_path.write_text(json.dumps(conversation_context, ensure_ascii=False, indent=2), encoding="utf-8")
 
     background_url: str | None = None
     if background_image and background_image.filename:
@@ -1872,6 +1934,7 @@ async def create_booth_turn(
                 "input_video_path": str(input_video_path) if input_video_path else None,
                 "background_id": background_id,
                 "background_url": background_url,
+                "conversation_context_json": str(conversation_context_path),
                 "match_result": match,
             },
         )

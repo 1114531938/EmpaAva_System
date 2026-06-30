@@ -4,10 +4,19 @@ import os
 import subprocess
 import sys
 import tempfile
+import ssl
 import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any, Dict
+
+
+def https_context():
+    try:
+        import certifi
+    except ImportError:
+        return None
+    return ssl.create_default_context(cafile=certifi.where())
 
 
 def load_json(path: str) -> Dict[str, Any]:
@@ -81,7 +90,7 @@ def translate_to_english(text: str, model: str, base_url: str, api_key: str) -> 
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=30) as resp:
+        with urllib.request.urlopen(request, timeout=30, context=https_context()) as resp:
             data = json.loads(resp.read().decode("utf-8"))
     except (OSError, urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
         raise RuntimeError(f"TTS translation request failed: {exc}") from exc
@@ -292,7 +301,7 @@ def main():
     parser.add_argument(
         "--llm_model",
         type=str,
-        default=os.environ.get("LLM_MODEL", "openai/gpt-oss-120b:free"),
+        default=os.environ.get("LLM_MODEL", "liquid/lfm-2.5-1.2b-instruct:free"),
         help="用于 TTS 文本翻译的 OpenAI-compatible model",
     )
     parser.add_argument(

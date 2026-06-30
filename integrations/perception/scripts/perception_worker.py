@@ -203,7 +203,7 @@ class PerceptionRequestHandler(BaseHTTPRequestHandler):
                 speaker_id=str(payload.get("speaker_id", "user")),
                 ser_model=str(payload.get("ser_model", "")),
                 no_llm=bool(payload.get("no_llm", False)),
-                llm_model=str(payload.get("llm_model", "openai/gpt-oss-120b:free")),
+                llm_model=str(payload.get("llm_model", "liquid/lfm-2.5-1.2b-instruct:free")),
                 llm_base_url=str(payload.get("llm_base_url", "https://openrouter.ai/api/v1")),
                 llm_api_key=str(payload.get("llm_api_key", "")),
             )

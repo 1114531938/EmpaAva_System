@@ -167,7 +167,7 @@ def main():
     parser.add_argument(
         "--llm_model",
         type=str,
-        default=os.environ.get("LLM_MODEL", "openai/gpt-oss-120b:free")
+        default=os.environ.get("LLM_MODEL", "liquid/lfm-2.5-1.2b-instruct:free")
     )
     parser.add_argument(
         "--llm_base_url",

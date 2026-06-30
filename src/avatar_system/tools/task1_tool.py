@@ -3,11 +3,20 @@ from __future__ import annotations
 import json
 import os
 import shlex
+import ssl
 import urllib.error
 import urllib.request
 import subprocess
 
 from avatar_system.pipeline.shell_runner import run_bash_in_container
+
+
+def _https_context():
+    try:
+        import certifi
+    except ImportError:
+        return None
+    return ssl.create_default_context(cafile=certifi.where())
 
 def _find_first_value(obj, keys):
     if isinstance(obj, dict):
@@ -44,6 +53,28 @@ def _latest_user_utterance(batch) -> str:
     return ""
 
 
+def _load_conversation_context(path: str | None) -> list[dict[str, str]]:
+    if not path:
+        return []
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return []
+    turns = data.get("turns") if isinstance(data, dict) else None
+    if not isinstance(turns, list):
+        return []
+    cleaned: list[dict[str, str]] = []
+    for turn in turns[-6:]:
+        if not isinstance(turn, dict):
+            continue
+        user = str(turn.get("user") or "").strip()
+        assistant = str(turn.get("assistant") or "").strip()
+        if user or assistant:
+            cleaned.append({"user": user, "assistant": assistant})
+    return cleaned
+
+
 def _fallback_reply_from_batch(batch) -> str:
     utterance = _latest_user_utterance(batch)
     if not utterance:
@@ -67,14 +98,14 @@ def _english_fallback_reply_from_batch(batch) -> str:
     return f"I hear the {emotion} in what you said: \"{utterance}\". Let's stay with that and take it one step at a time."
 
 
-def _llm_english_reply_from_batch(batch, config: dict | None = None) -> str:
+def _llm_english_reply_from_batch(batch, config: dict | None = None, conversation_context_path: str | None = None) -> tuple[str, str]:
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
-        return ""
+        return "", "OPENAI_API_KEY is not configured"
 
     utterance = _latest_user_utterance(batch)
     if not utterance:
-        return ""
+        return "", "No user utterance found for LLM reply"
 
     config = config or {}
     model = (
@@ -97,27 +128,39 @@ def _llm_english_reply_from_batch(batch, config: dict | None = None) -> str:
     except (AttributeError, IndexError, TypeError):
         pass
 
-    system = (
-        "You are the English dialogue brain for a friendly digital human in a short video call. "
-        "Reply in natural, specific English. Be warm and conversational, but do not sound like a therapist "
-        "unless the user is clearly discussing feelings. Use one or two concise sentences. "
-        "Do not mention that you are an AI, subtitles, ASR, or internal models."
-    )
+    context_turns = _load_conversation_context(conversation_context_path)
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are the dialogue brain for a friendly digital human in a short video call. "
+                "Have a normal, direct conversation that responds to the user's actual words. "
+                "Do not use generic therapy-style templates unless the user is clearly discussing feelings. "
+                "If there is prior dialogue, naturally continue it instead of restarting. "
+                "Use one or two concise spoken sentences. "
+                "Reply in English. Do not mention ASR, subtitles, internal models, or that you are an AI."
+            ),
+        }
+    ]
+    for turn in context_turns:
+        if turn.get("user"):
+            messages.append({"role": "user", "content": turn["user"]})
+        if turn.get("assistant"):
+            messages.append({"role": "assistant", "content": turn["assistant"]})
+
     user = (
         f"User said: {utterance}\n"
         f"Detected emotion: {emotion or 'unknown'}\n"
         f"Visual/context notes: {context or 'none'}\n"
-        "Write the digital human's next spoken reply in English."
+        "Write the digital human's next spoken reply in English. Be specific to this utterance."
     )
+    messages.append({"role": "user", "content": user})
     payload = json.dumps(
         {
             "model": model,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            "temperature": 0.7,
-            "max_tokens": 90,
+            "messages": messages,
+            "temperature": float(config.get("task1_llm_temperature", 0.75)),
+            "max_tokens": int(config.get("task1_llm_max_tokens", 90)),
         }
     ).encode("utf-8")
     request = urllib.request.Request(
@@ -126,22 +169,40 @@ def _llm_english_reply_from_batch(batch, config: dict | None = None) -> str:
         headers={
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}",
+            "HTTP-Referer": "http://localhost",
+            "X-Title": "avatar_system_full",
         },
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=float(config.get("task1_llm_timeout", 20))) as resp:
+        with urllib.request.urlopen(
+            request,
+            timeout=float(config.get("task1_llm_timeout", 20)),
+            context=_https_context(),
+        ) as resp:
             result = json.loads(resp.read().decode("utf-8"))
-    except (OSError, urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError):
-        return ""
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:1000]
+        return "", f"HTTP {exc.code} from {base_url}: {detail}"
+    except (OSError, urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as exc:
+        return "", f"{type(exc).__name__}: {exc}"
 
     try:
         text = str(result["choices"][0]["message"]["content"]).strip()
-    except (KeyError, IndexError, TypeError):
-        return ""
+    except (KeyError, IndexError, TypeError) as exc:
+        return "", f"Malformed LLM response: {type(exc).__name__}"
+    if not text or text.lower() == "none":
+        return "", "LLM response did not include message content"
     if _looks_chinese(text):
-        return ""
-    return " ".join(text.split())
+        return "", "LLM response was Chinese; using English fallback"
+    return " ".join(text.split()), ""
+
+
+def _should_prefer_llm_reply(config: dict | None = None) -> bool:
+    if not os.environ.get("OPENAI_API_KEY"):
+        return False
+    value = os.environ.get("TASK1_REPLY_MODE") or str((config or {}).get("task1_reply_mode") or "llm")
+    return value.strip().lower() not in {"avamerg", "model", "local", "off", "0", "false"}
 
 
 def _looks_chinese(text: str) -> bool:
@@ -212,27 +273,59 @@ class Task1Tool:
         )
 
         fixed_chinese_reply = "谢谢你愿意和我说这些。你不用着急，想从哪里开始都可以。我会认真听你慢慢说。"
-        if preferred_text and not _looks_chinese(preferred_text):
+        batch = data.get("batch_preview")
+        if not isinstance(batch, dict):
+            try:
+                with open(state.task1_input_json, "r", encoding="utf-8") as f:
+                    batch = json.load(f)
+            except (OSError, json.JSONDecodeError):
+                batch = {}
+
+        llm_reply = ""
+        llm_error = ""
+        if _should_prefer_llm_reply(self.config):
+            llm_reply, llm_error = _llm_english_reply_from_batch(
+                batch,
+                self.config,
+                getattr(state, "conversation_context_json", None),
+            )
+
+        if llm_reply:
+            reply_text = llm_reply
+        elif preferred_text and not _looks_chinese(preferred_text):
             reply_text = preferred_text
         elif reply_text == fixed_chinese_reply or _looks_chinese(reply_text or ""):
-            batch = data.get("batch_preview")
-            if not isinstance(batch, dict):
-                try:
-                    with open(state.task1_input_json, "r", encoding="utf-8") as f:
-                        batch = json.load(f)
-                except (OSError, json.JSONDecodeError):
-                    batch = {}
-            reply_text = _llm_english_reply_from_batch(batch, self.config) or _english_fallback_reply_from_batch(batch)
+            second_llm_reply, second_llm_error = _llm_english_reply_from_batch(
+                batch,
+                self.config,
+                getattr(state, "conversation_context_json", None),
+            )
+            if second_llm_reply:
+                reply_text = second_llm_reply
+            else:
+                llm_error = llm_error or second_llm_error
+                reply_text = _english_fallback_reply_from_batch(batch)
 
         if reply_text:
             data["reply_text"] = reply_text
             data["tts_text"] = reply_text
+            if llm_reply:
+                data["llm_reply_used"] = True
+            elif llm_error:
+                data["llm_reply_used"] = False
+                data["llm_error"] = llm_error
             raw_result = data.get("raw_result")
             if isinstance(raw_result, dict):
                 raw_result["reply_text"] = reply_text
                 raw_result["generated_text"] = reply_text
             with open(out_json, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
+
+        if llm_error:
+            log_path = os.path.join(state.log_dir, "task1.log")
+            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(f"[task1_llm] {llm_error}\n")
 
         state.task1_reply_json = out_json
         state.reply_text = reply_text

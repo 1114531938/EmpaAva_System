@@ -92,6 +92,10 @@ http://localhost:7862/
 
 See `docs/SERVICES_AND_PORTS.md` for additional service notes.
 
+For moving the project to another server from GitHub, including environment,
+model checkpoint, container, and path setup, use
+`docs/REPRODUCTION_SETUP.md`.
+
 ## Pipeline Architecture
 
 The runnable pipeline is organized as three high-level agents:

@@ -106,7 +106,7 @@ class PerceptionTool:
                 "speaker_id": str(perception_cfg["speaker_id"]),
                 "ser_model": str(perception_cfg["ser_model"]),
                 "no_llm": bool(perception_cfg.get("no_llm", False)),
-                "llm_model": os.environ.get("LLM_MODEL", env_cfg.get("LLM_MODEL", "openai/gpt-oss-120b:free")),
+                "llm_model": os.environ.get("LLM_MODEL", env_cfg.get("LLM_MODEL", "liquid/lfm-2.5-1.2b-instruct:free")),
                 "llm_base_url": os.environ.get("OPENAI_BASE_URL", env_cfg.get("OPENAI_BASE_URL", "https://openrouter.ai/api/v1")),
                 "llm_api_key": os.environ.get("OPENAI_API_KEY", ""),
             }
@@ -172,7 +172,7 @@ class PerceptionTool:
         export MODELSCOPE_CACHE={q(env_cfg["MODELSCOPE_CACHE"])}
         export OPENAI_API_KEY={q(os.environ.get("OPENAI_API_KEY", ""))}
         export OPENAI_BASE_URL={q(os.environ.get("OPENAI_BASE_URL", env_cfg.get("OPENAI_BASE_URL", "https://openrouter.ai/api/v1")))}
-        export LLM_MODEL={q(os.environ.get("LLM_MODEL", env_cfg.get("LLM_MODEL", "openai/gpt-oss-120b:free")))}
+        export LLM_MODEL={q(os.environ.get("LLM_MODEL", env_cfg.get("LLM_MODEL", "liquid/lfm-2.5-1.2b-instruct:free")))}
         mkdir -p "$HF_HOME" "$XDG_CACHE_HOME" "$MODELSCOPE_CACHE"
         cd {q(root)}
         {q(py)} scripts/run_full_pipeline.py \
