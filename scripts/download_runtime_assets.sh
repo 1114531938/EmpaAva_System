@@ -7,8 +7,10 @@ ROOT="${AVATAR_SYSTEM_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 REPO="${AVATAR_RUNTIME_REPO:-1114531938/avatar-system-full}"
 TAG="${AVATAR_RUNTIME_RELEASE_TAG:-runtime-assets-2026-07-01}"
 PREFIX="${AVATAR_RUNTIME_ASSET_PREFIX:-avatar-system-full-runtime-assets}"
+PREFIXES="${AVATAR_RUNTIME_ASSET_PREFIXES:-$PREFIX avatar-system-full-runtime-assets-patch1}"
 DOWNLOAD_DIR="${AVATAR_RUNTIME_DOWNLOAD_DIR:-$ROOT/runtime/release_assets/downloads/$TAG}"
 BASE_URL="${AVATAR_RUNTIME_BASE_URL:-https://github.com/$REPO/releases/download/$TAG}"
+SHA_FILE_NAME="${AVATAR_RUNTIME_SHA_FILE:-sha256sums.patch1.txt}"
 
 need_cmd() {
   command -v "$1" >/dev/null 2>&1 || {
@@ -36,35 +38,57 @@ download() {
   curl -fL --retry 5 --retry-delay 5 -o "$name" "$url"
 }
 
-download "sha256sums.txt"
+if ! download "$SHA_FILE_NAME"; then
+  if [[ "$SHA_FILE_NAME" != "sha256sums.txt" ]]; then
+    echo "No $SHA_FILE_NAME found in release; falling back to sha256sums.txt"
+    SHA_FILE_NAME="sha256sums.txt"
+    download "$SHA_FILE_NAME"
+  fi
+fi
+if [[ "$SHA_FILE_NAME" != "sha256sums.txt" ]]; then
+  ln -sf "$SHA_FILE_NAME" sha256sums.txt
+fi
+
 if curl -fL --retry 3 --retry-delay 3 -o "runtime_assets_manifest.txt" \
+  "$BASE_URL/runtime_assets_manifest.patch1.txt"; then
+  echo "Downloaded runtime_assets_manifest.patch1.txt"
+elif curl -fL --retry 3 --retry-delay 3 -o "runtime_assets_manifest.txt" \
   "$BASE_URL/runtime_assets_manifest.txt"; then
   echo "Downloaded runtime_assets_manifest.txt"
 else
-  echo "No runtime_assets_manifest.txt found in release; continuing with sha256sums.txt"
+  echo "No runtime_assets_manifest found in release; continuing with sha256sums.txt"
   rm -f runtime_assets_manifest.txt
 fi
 
-mapfile -t PARTS < <(awk -v p="$PREFIX.tar.zst.part-" 'index($2, p) == 1 {print $2}' sha256sums.txt | sort)
-if [[ "${#PARTS[@]}" -eq 0 ]]; then
-  echo "No archive parts named $PREFIX.tar.zst.part-* found in sha256sums.txt" >&2
-  exit 1
-fi
-
-for part in "${PARTS[@]}"; do
-  if [[ -s "$part" ]] && grep -F "  $part" sha256sums.txt | sha256sum -c - >/dev/null 2>&1; then
-    echo "Checksum already OK: $part"
-  else
-    rm -f "$part"
-    download "$part"
+archives_found=0
+for archive_prefix in $PREFIXES; do
+  mapfile -t PARTS < <(awk -v p="$archive_prefix.tar.zst.part-" 'index($2, p) == 1 {print $2}' sha256sums.txt | sort)
+  if [[ "${#PARTS[@]}" -eq 0 ]]; then
+    echo "No archive parts named $archive_prefix.tar.zst.part-* found in sha256sums.txt; skipping"
+    continue
   fi
+  archives_found=1
+
+  for part in "${PARTS[@]}"; do
+    if [[ -s "$part" ]] && grep -F "  $part" sha256sums.txt | sha256sum -c - >/dev/null 2>&1; then
+      echo "Checksum already OK: $part"
+    else
+      rm -f "$part"
+      download "$part"
+    fi
+  done
+
+  echo "Verifying downloaded runtime asset parts for $archive_prefix"
+  grep -F "$archive_prefix.tar.zst.part-" sha256sums.txt | sha256sum -c -
+
+  echo "Extracting $archive_prefix into $ROOT"
+  cat "${PARTS[@]}" | zstd -d --stdout | tar -xpf - -C "$ROOT"
 done
 
-echo "Verifying downloaded runtime asset parts"
-grep -F "$PREFIX.tar.zst.part-" sha256sums.txt | sha256sum -c -
-
-echo "Extracting runtime assets into $ROOT"
-cat "${PARTS[@]}" | zstd -d --stdout | tar -xpf - -C "$ROOT"
+if [[ "$archives_found" -eq 0 ]]; then
+  echo "No runtime archive parts found in sha256sums.txt for prefixes: $PREFIXES" >&2
+  exit 1
+fi
 
 chmod +x "$ROOT/runtime/cache/bin/ffmpeg" "$ROOT/runtime/cache/bin/ffprobe" 2>/dev/null || true
 
@@ -74,12 +98,23 @@ REQUIRED_PATHS=(
   "runtime/cache/bin/ffprobe"
   "runtime/cache/xdg/whisper/small.pt"
   "runtime/cache/modelscope/models/iic/emotion2vec_plus_seed"
+  "runtime/cache/modelscope/iic/emotion2vec_base_finetuned/emotion2vec_base.pt"
   "integrations/deeptalk/DEE/models/emo2vec/checkpoint/emotion2vec_base.pt"
+  "integrations/deeptalk/DEE/models/emo2vec/emotion2vec_base.pt"
   "integrations/avamerg/ckpt/pretrained_ckpt/imagebind_ckpt/huge/imagebind_huge.pth"
   "integrations/avamerg/ckpt/pretrained_ckpt/vicuna_ckpt/7b_v0"
   "integrations/emotivoice/outputs/prompt_tts_open_source_joint/ckpt/g_00140000"
   "integrations/emotivoice/outputs/prompt_tts_open_source_joint/ckpt/do_00140000"
-  "integrations/emotivoice/WangZeJun/simbert-base-chinese"
+  "integrations/emotivoice/outputs/style_encoder/ckpt/checkpoint_163431"
+  "integrations/emotivoice/data/youdao/text/README.md"
+  "integrations/emotivoice/data/youdao/text/emotion"
+  "integrations/emotivoice/data/youdao/text/energy"
+  "integrations/emotivoice/data/youdao/text/pitch"
+  "integrations/emotivoice/data/youdao/text/speaker2"
+  "integrations/emotivoice/data/youdao/text/speed"
+  "integrations/emotivoice/data/youdao/text/tokenlist"
+  "integrations/emotivoice/WangZeJun/simbert-base-chinese/model.safetensors"
+  "integrations/emotivoice/WangZeJun/simbert-base-chinese/pytorch_model.bin"
   "integrations/deeptalk/DEE/checkpoint/DEE.pt"
   "integrations/deeptalk/DEEPTalk/checkpoint/DEEPTalk/DEEPTalk.pth"
   "integrations/deeptalk/DEEPTalk/checkpoint/TH-VQVAE/TH-VQVAE.pth"
@@ -87,6 +122,9 @@ REQUIRED_PATHS=(
   "integrations/gaussian_avatar/media/306/point_cloud.ply"
   "integrations/gaussian_avatar/media/306/flame_param.npz"
   "integrations/gaussian_avatar/flame_model/assets"
+  "integrations/gaussian_avatar/submodules/diff-gaussian-rasterization"
+  "integrations/gaussian_avatar/submodules/diff-gaussian-rasterization/cuda_rasterizer/rasterizer_impl.h"
+  "integrations/gaussian_avatar/submodules/simple-knn"
   "integrations/vhap/asset/flame/flame2023.pkl"
   "integrations/vhap/asset/flame/FLAME_masks.pkl"
   "integrations/vhap/asset/flame/landmark_embedding_with_eyes.npy"

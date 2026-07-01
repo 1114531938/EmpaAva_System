@@ -11,12 +11,24 @@ import einops
 
 import fairseq 
 from dataclasses import dataclass
+from pathlib import Path
 
 from .gradient_reversal import GradientReversal
 from .aggr import GPO, AvgPool
 import sys
 sys.path.append('../')
 from FER.get_model import init_model_from_path
+
+
+def _emo2vec_checkpoint(model_dir):
+    candidates = [
+        Path(model_dir) / "checkpoint" / "emotion2vec_base.pt",
+        Path(model_dir) / "emotion2vec_base.pt",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+    return str(candidates[0])
 
 
 class PositionalEncoding(nn.Module):
@@ -60,7 +72,7 @@ class PointAudioEncoder(nn.Module):
 
         model_dir = './DEE/models/emo2vec'
         model_path = UserDirModule(model_dir)
-        emo2vec_checkpoint = './DEE/models/emo2vec/emotion2vec_base.pt'
+        emo2vec_checkpoint = _emo2vec_checkpoint(model_dir)
         fairseq.utils.import_user_module(model_path)
         model, cfg, task = fairseq.checkpoint_utils.load_model_ensemble_and_task([emo2vec_checkpoint])
         self.embedding_model = model[0]
@@ -92,7 +104,7 @@ class PointAudioEncoder(nn.Module):
         embeddings = self.embedding_model.extract_features(audio, padding_mask=None) 
         embeddings = embeddings['x'] # (BS, 50*sec, 768)
         
-       if self.audio_pool == 'cls':
+        if self.audio_pool == 'cls':
             batch_size = embeddings.shape[0]
             cls_token = einops.repeat(self.audio_cls_token, '() n e -> b n e', b=batch_size).to(self.device)
             embeddings = torch.cat([cls_token, embeddings], dim=1) # (BS,13,256)
@@ -149,7 +161,7 @@ class PointExpEncoder(nn.Module):
         '''
         exp = self.exp_map(raw_exp) # (BS, seq_len, model_dim)
         
-       if self.exp_pool == 'cls':
+        if self.exp_pool == 'cls':
             batch_size = exp.shape[0]
             cls_token = einops.repeat(self.parameter_cls_token, '() n e -> b n e', b=batch_size).to(self.device)
             embeddings = torch.cat([cls_token, exp], dim=1) # (BS,13,256)

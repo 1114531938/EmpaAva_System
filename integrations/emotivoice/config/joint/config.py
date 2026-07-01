@@ -31,7 +31,7 @@ def get_labels_length(file_path):
 
 class Config:
     #### PATH ####
-    ROOT_DIR            = os.path.dirname(os.path.abspath("__file__"))
+    ROOT_DIR            = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     DATA_DIR            = ROOT_DIR + "/data/youdao/"
     train_data_path     = DATA_DIR + "train_am/datalist.jsonl"
     valid_data_path     = DATA_DIR + "valid_am/datalist.jsonl"
@@ -41,7 +41,7 @@ class Config:
     pitch2id_path       = DATA_DIR + "text/pitch"
     energy2id_path      = DATA_DIR + "text/energy"
     speed2id_path       = DATA_DIR + "text/speed"
-    bert_path           = '/scratch/e1554543/avatar_system_full/runtime/cache/models/emotivoice/simbert-base-chinese'
+    bert_path           = ROOT_DIR + "/WangZeJun/simbert-base-chinese"
     token_list_path     = DATA_DIR + "text/tokenlist"
     style_encoder_ckpt  = ROOT_DIR + "/outputs/style_encoder/ckpt/checkpoint_163431"
     tmp_dir             = ROOT_DIR + "/tmp"

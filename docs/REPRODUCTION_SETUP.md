@@ -41,6 +41,15 @@ archive into the repository root, checks the required model/container/avatar
 paths for the 7862 Booth stack and workers 8788-8792, and then rebuilds missing
 Python virtual environments by default.
 
+The July 1 runtime Release currently has a base archive plus
+`avatar-system-full-runtime-assets-patch1`. The download script uses
+`sha256sums.patch1.txt` by default so both archives are restored in order. To
+force an older checksum file:
+
+```bash
+AVATAR_RUNTIME_SHA_FILE=sha256sums.txt bash scripts/download_runtime_assets.sh
+```
+
 To restore only the Release assets and skip venv creation:
 
 ```bash

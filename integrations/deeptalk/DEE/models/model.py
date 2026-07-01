@@ -8,13 +8,41 @@ from .wav2vec import Wav2Vec2Model
 import torch.nn.functional as F
 import copy
 import einops
+import os
 import fairseq
 from dataclasses import dataclass
 from funasr import AutoModel
+from pathlib import Path
 import sys
 from .aggr import GPO, AvgPool
 
 from DEE.utils.masks import init_alibi_biased_mask_future
+
+EMOTION2VEC_MODEL_ID = "iic/emotion2vec_base_finetuned"
+
+
+def _emo2vec_checkpoint(model_dir):
+    candidates = [
+        Path(model_dir) / "checkpoint" / "emotion2vec_base.pt",
+        Path(model_dir) / "emotion2vec_base.pt",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+    return str(candidates[0])
+
+
+def _emotion2vec_model_source():
+    cache_roots = []
+    if os.environ.get("MODELSCOPE_CACHE"):
+        cache_roots.append(Path(os.environ["MODELSCOPE_CACHE"]))
+    cache_roots.append(Path(__file__).resolve().parents[4] / "runtime" / "cache" / "modelscope")
+
+    for cache_root in cache_roots:
+        model_dir = cache_root / "iic" / "emotion2vec_base_finetuned"
+        if (model_dir / "configuration.json").exists():
+            return str(model_dir)
+    return EMOTION2VEC_MODEL_ID
 
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_seq_len=512):
@@ -288,12 +316,16 @@ class DEE_v2(nn.Module) :
             self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1/args.temperature))
         model_dir = '../DEE/models/emo2vec'
         model_path = UserDirModule(model_dir)
-        emo2vec_checkpoint = '../DEE/models/emo2vec/emotion2vec_base.pt'
+        emo2vec_checkpoint = _emo2vec_checkpoint(model_dir)
         fairseq.utils.import_user_module(model_path)
         model, cfg, task = fairseq.checkpoint_utils.load_model_ensemble_and_task([emo2vec_checkpoint])
         self.embedding_model = model[0]
         if args.use_finetuned_emo2vec:
-            finetuned_model = AutoModel(model="iic/emotion2vec_base_finetuned", model_revision="v2.0.4")
+            finetuned_model = AutoModel(
+                model=_emotion2vec_model_source(),
+                check_latest=False,
+                disable_update=True,
+            )
             finetuned_model_state_dict = finetuned_model.model.state_dict()
             pt_model_state_dict = self.embedding_model.state_dict()
             new_checkpoint = {k: v for k, v in finetuned_model_state_dict.items() if k in list(pt_model_state_dict.keys())}
@@ -526,4 +558,3 @@ class DEE_v2(nn.Module) :
             raise ValueError('Invalid expression pooling method') 
 
         return output
-

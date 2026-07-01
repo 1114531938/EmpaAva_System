@@ -82,19 +82,19 @@ ensure_booth_workers() {
   fi
   mkdir -p "$(service_log_dir)"
   if [[ "${START_TTS_WORKER:-1}" == "1" ]]; then
-    service_start_worker tts tts_worker "http://${TTS_WORKER_HOST:-127.0.0.1}:${TTS_WORKER_PORT:-8788}" "${TTS_WORKER_START_TIMEOUT:-240}"
+    service_start_worker tts tts_worker "http://${TTS_WORKER_HOST:-127.0.0.1}:${TTS_WORKER_PORT:-8788}" "${TTS_WORKER_START_TIMEOUT:-600}"
   fi
   if [[ "${START_AVAMERG_WORKER:-1}" == "1" ]]; then
-    service_start_worker avamerg avamerg_worker "http://${AVAMERG_WORKER_HOST:-127.0.0.1}:${AVAMERG_WORKER_PORT:-8789}" "${AVAMERG_WORKER_START_TIMEOUT:-240}"
+    service_start_worker avamerg avamerg_worker "http://${AVAMERG_WORKER_HOST:-127.0.0.1}:${AVAMERG_WORKER_PORT:-8789}" "${AVAMERG_WORKER_START_TIMEOUT:-600}"
   fi
   if [[ "${START_DEEPTALK_WORKER:-1}" == "1" ]]; then
-    service_start_worker deeptalk deeptalk_worker "http://${DEEPTALK_WORKER_HOST:-127.0.0.1}:${DEEPTALK_WORKER_PORT:-8790}" "${DEEPTALK_WORKER_START_TIMEOUT:-180}"
+    service_start_worker deeptalk deeptalk_worker "http://${DEEPTALK_WORKER_HOST:-127.0.0.1}:${DEEPTALK_WORKER_PORT:-8790}" "${DEEPTALK_WORKER_START_TIMEOUT:-600}"
   fi
   if [[ "${START_PERCEPTION_WORKER:-1}" == "1" ]]; then
-    service_start_worker perception perception_worker "http://${PERCEPTION_WORKER_HOST:-127.0.0.1}:${PERCEPTION_WORKER_PORT:-8791}" "${PERCEPTION_WORKER_START_TIMEOUT:-240}"
+    service_start_worker perception perception_worker "http://${PERCEPTION_WORKER_HOST:-127.0.0.1}:${PERCEPTION_WORKER_PORT:-8791}" "${PERCEPTION_WORKER_START_TIMEOUT:-600}"
   fi
   if [[ "${START_GAUSSIAN_RENDER_WORKER:-1}" == "1" ]]; then
-    service_start_worker gaussian gaussian_render_worker "http://${GAUSSIAN_RENDER_WORKER_HOST:-127.0.0.1}:${GAUSSIAN_RENDER_WORKER_PORT:-8792}" "${GAUSSIAN_RENDER_WORKER_START_TIMEOUT:-180}"
+    service_start_worker gaussian gaussian_render_worker "http://${GAUSSIAN_RENDER_WORKER_HOST:-127.0.0.1}:${GAUSSIAN_RENDER_WORKER_PORT:-8792}" "${GAUSSIAN_RENDER_WORKER_START_TIMEOUT:-600}"
   fi
 }
 

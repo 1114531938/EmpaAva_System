@@ -24,6 +24,17 @@ from DEE.utils.loss import ClosedFormSampledDistanceLoss
 EMOTION2VEC_MODEL_ID = "iic/emotion2vec_base_finetuned"
 
 
+def _emo2vec_checkpoint(model_dir):
+    candidates = [
+        Path(model_dir) / "checkpoint" / "emotion2vec_base.pt",
+        Path(model_dir) / "emotion2vec_base.pt",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+    return str(candidates[0])
+
+
 def _emotion2vec_model_source():
     cache_roots = []
     if os.environ.get("MODELSCOPE_CACHE"):
@@ -105,7 +116,7 @@ class ProbAudioEncoder(nn.Module):
         if not self.input_embeddings: # if input audio
             model_dir = '../DEE/models/emo2vec'
             model_path = UserDirModule(model_dir)
-            emo2vec_checkpoint = '../DEE/models/emo2vec/emotion2vec_base.pt'
+            emo2vec_checkpoint = _emo2vec_checkpoint(model_dir)
             fairseq.utils.import_user_module(model_path)
             model, cfg, task = fairseq.checkpoint_utils.load_model_ensemble_and_task([emo2vec_checkpoint])
             self.embedding_model = model[0]
