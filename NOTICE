@@ -1,0 +1,10 @@
+EmpaAva
+Copyright 2026 EmpaAva contributors
+
+EmpaAva-authored source code is licensed under the Apache License, Version 2.0.
+
+This distribution includes and interfaces with third-party software, model
+weights, datasets, avatar assets, and voice resources that remain under their
+own licenses and usage terms. See THIRD_PARTY_LICENSES.md and the license files
+inside each integration directory. No third-party material is relicensed by the
+EmpaAva Apache-2.0 license.

@@ -4,10 +4,10 @@
 
 ### An Open-source Agentic 3D-Avatar Empathetic Live Chatbot
 
-[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white)](#quick-start)
-[![FastAPI](https://img.shields.io/badge/FastAPI-Backend-009688?style=flat-square&logo=fastapi&logoColor=white)](#quick-start)
+[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white)](#installation)
+[![FastAPI](https://img.shields.io/badge/FastAPI-Backend-009688?style=flat-square&logo=fastapi&logoColor=white)](#installation)
 [![3D Avatar](https://img.shields.io/badge/Avatar-3D%20Gaussian%20Splatting-7C3AED?style=flat-square)](#architecture)
-[![License](https://img.shields.io/badge/License-Research--only-lightgrey?style=flat-square)](#license)
+[![License](https://img.shields.io/badge/First--party%20code-Apache--2.0-green?style=flat-square)](#license-and-responsible-use)
 
 </div>
 
@@ -29,12 +29,12 @@ emotional speech, facial motion, and photorealistic 3D-avatar rendering.
 - [Demo](#demo)
 - [Workflow](#workflow)
 - [Architecture](#architecture)
-- [Quick Start](#quick-start)
+- [Installation](#installation)
 - [Models and Runtime](#models-and-runtime)
 - [Configuration and Documentation](#configuration-and-documentation)
 - [Acknowledgements](#acknowledgements)
 - [Citation](#citation)
-- [License](#license)
+- [License and Responsible Use](#license-and-responsible-use)
 
 ## Highlights
 
@@ -114,7 +114,36 @@ interfaces, so perception, planning, speech, motion, and rendering components ca
 be tested or replaced independently. See
 [Agent Architecture](docs/AGENT_ARCHITECTURE.md) for the full stage contracts.
 
-## Quick Start
+## Installation
+
+### Requirements
+
+The complete avatar pipeline is intended for a Linux GPU server. A source-only
+checkout can run the documentation and lightweight web code, but rendering
+requires the separately published runtime assets.
+
+| Requirement | Supported or expected configuration |
+| --- | --- |
+| Operating system | Ubuntu 20.04/22.04 or a compatible Linux distribution |
+| Python | Python 3 for most workers; Python 3.8 for AvaMERG |
+| GPU | NVIDIA GPU with a driver/CUDA stack compatible with the restored environments |
+| Container runtime | Apptainer or Singularity with NVIDIA GPU support |
+| System tools | Git, Git LFS, curl, build tools, FFmpeg/FFprobe, Python venv support |
+| Storage | Allow substantial space for checkpoints, the Gaussian container, caches, and outputs |
+
+Install the basic Ubuntu packages:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y \
+  git git-lfs curl build-essential ffmpeg \
+  python3 python3-dev python3-venv python3-pip
+git lfs install
+```
+
+Install the NVIDIA driver, CUDA runtime, and Apptainer separately according to
+your host. Confirm that `nvidia-smi` and `apptainer exec --nv ...` can access the
+GPU before starting the rendering worker.
 
 ### 1. Clone the repository
 
@@ -123,11 +152,109 @@ git clone https://github.com/1114531938/EmpaAva_System.git
 cd EmpaAva_System
 ```
 
-The full system depends on local model checkpoints, integration environments,
-and runtime assets. Complete the machine setup described in
-[Reproduction Setup](docs/REPRODUCTION_SETUP.md) before launching all workers.
+Set a stable absolute project path and create the local configuration:
 
-### 2. Start an interface
+```bash
+export AVATAR_SYSTEM_ROOT="$(pwd)"
+export PROJECT_ROOT="$AVATAR_SYSTEM_ROOT"
+cp config/runtime.env.example config/runtime.env
+chmod 600 config/runtime.env
+```
+
+Edit `config/runtime.env` and set at least `AVATAR_SYSTEM_ROOT`, `PROJECT_ROOT`,
+`DEPB_ROOT`, and the configured LLM provider credentials. Never commit this file.
+
+```bash
+set -a
+source config/runtime.env
+set +a
+```
+
+### 2. Restore models and runtime assets
+
+Model checkpoints, avatar point clouds, the Gaussian rendering container, and
+other large runtime files are distributed through the
+[`runtime-assets-2026-07-01`](https://github.com/1114531938/EmpaAva_System/releases/tag/runtime-assets-2026-07-01)
+GitHub Release rather than Git:
+
+```bash
+bash scripts/download_runtime_assets.sh
+```
+
+The script downloads all archive parts, verifies their SHA-256 checksums,
+extracts them into the expected paths, and rebuilds missing Python environments.
+To restore assets without building environments, use:
+
+```bash
+AVATAR_RUNTIME_REBUILD_VENVS=0 bash scripts/download_runtime_assets.sh
+```
+
+### 3. Build or repair the Python environments
+
+```bash
+bash scripts/rebuild_runtime_venvs.sh
+```
+
+The default layout is:
+
+```text
+runtime/cache/venvs/web
+runtime/cache/venvs/perception
+runtime/cache/venvs/deeptalk
+integrations/avamerg/.avamerg38
+integrations/emotivoice/.EmotiVoice
+integrations/gaussian_avatar/.GSavatar_glibc
+```
+
+If Python 3.8 is not on `PATH`, specify both interpreters explicitly:
+
+```bash
+AVATAR_PYTHON3=/usr/bin/python3 \
+AVATAR_PYTHON38=/usr/bin/python3.8 \
+  bash scripts/rebuild_runtime_venvs.sh
+```
+
+### 4. Configure host paths and FFmpeg
+
+The restored runtime normally provides cached FFmpeg binaries. To use the system
+installation instead:
+
+```bash
+export AVATAR_FFMPEG=/usr/bin/ffmpeg
+export AVATAR_FFPROBE=/usr/bin/ffprobe
+export DEPB_FFMPEG=/usr/bin/ffmpeg
+```
+
+If the repository is outside `/scratch`, expose its absolute path to Apptainer:
+
+```bash
+export APPTAINER_FLAGS="--nv -B $AVATAR_SYSTEM_ROOT:$AVATAR_SYSTEM_ROOT"
+```
+
+See [Reproduction Setup](docs/REPRODUCTION_SETUP.md) for the full checkpoint
+inventory and all supported path overrides.
+
+### 5. Verify the installation
+
+```bash
+bash scripts/avatar.sh --help
+
+test -x runtime/cache/venvs/web/bin/python
+test -x runtime/cache/venvs/perception/bin/python
+test -x runtime/cache/venvs/deeptalk/bin/python
+test -x integrations/avamerg/.avamerg38/bin/python
+test -x integrations/emotivoice/.EmotiVoice/bin/python
+test -x integrations/gaussian_avatar/.GSavatar_glibc/bin/python
+
+test -f integrations/emotivoice/outputs/prompt_tts_open_source_joint/ckpt/g_00140000
+test -f integrations/deeptalk/DEEPTalk/checkpoint/DEEPTalk/DEEPTalk.pth
+test -f integrations/gaussian_avatar/media/306/point_cloud.ply
+test -f integrations/gaussian_avatar/media/306/flame_param.npz
+```
+
+Every `test` command should exit successfully without printing output.
+
+### 6. Start the system
 
 ```bash
 # Main studio UI
@@ -152,10 +279,22 @@ bash scripts/avatar.sh worker deeptalk
 bash scripts/avatar.sh worker gaussian
 ```
 
-### 3. Run the agent pipeline directly
+Check the services after startup:
 
 ```bash
-PYTHONPATH=src python -m avatar_system.pipeline.cli \
+curl -fsS http://127.0.0.1:7862/
+curl -fsS http://127.0.0.1:8788/health
+curl -fsS http://127.0.0.1:8789/health
+curl -fsS http://127.0.0.1:8790/health
+curl -fsS http://127.0.0.1:8791/health
+curl -fsS http://127.0.0.1:8792/health
+```
+
+### 7. Run a CLI smoke test
+
+```bash
+PYTHONPATH=src runtime/cache/venvs/deeptalk/bin/python \
+  -m avatar_system.pipeline.cli \
   --input_wav /path/to/input.wav \
   --input_video /path/to/optional_user_video.webm \
   --avatar_id 306 \
@@ -167,6 +306,12 @@ PYTHONPATH=src python -m avatar_system.pipeline.cli \
 Outputs are written to `runtime/outputs/<run_id>/`, including stage state,
 perception results, the reply plan, generated audio and motion, viewer assets,
 and the final avatar video.
+
+Common failures are usually caused by missing release assets, incompatible CUDA
+wheels, incorrect Apptainer bind paths, or environment variables that still
+point to the original machine. The troubleshooting checklist in
+[Reproduction Setup](docs/REPRODUCTION_SETUP.md#10-troubleshooting) covers each
+worker and required checkpoint.
 
 ## Models and Runtime
 
@@ -243,9 +388,30 @@ If you find EmpaAva useful in your research, please cite:
 }
 ```
 
-## License
+## License and Responsible Use
 
-This repository combines multiple research components. Check the license and
-usage terms of every integrated model, checkpoint, dataset, voice, and avatar
-asset before redistribution or commercial use. Some dependencies are restricted
-to research or non-commercial use.
+EmpaAva-authored source code is licensed under the **Apache License 2.0**; see
+[LICENSE](LICENSE) and [NOTICE](NOTICE). This license does **not** relicense the
+third-party integrations, model weights, datasets, avatars, voices, or other
+assets included in or downloaded by the project.
+
+| Component or asset | Governing terms |
+| --- | --- |
+| AvaMERG and DEEPTalk source | MIT License |
+| EmotiVoice source and service | Apache-2.0 plus the bundled EmotiVoice User Agreement |
+| GaussianAvatars and VHAP | CC BY-NC-SA 4.0; non-commercial restrictions apply |
+| Gaussian Splatting code | Inria/MPII research and evaluation license; no commercial use without permission |
+| ImageBind integration | CC BY-NC-SA 4.0 |
+| Model checkpoints and datasets | Their respective upstream model cards, dataset licenses, and access agreements |
+| Avatar identities, point clouds, images, and videos | Research-demo use only unless an asset-specific written grant says otherwise; no identity or publicity rights are granted |
+| EmotiVoice speakers and generated speech | EmotiVoice Apache-2.0 license and User Agreement; users remain responsible for voice, content, and output rights |
+
+The complete runnable system must satisfy **all** applicable terms; the most
+restrictive component or asset may therefore limit a deployment to research and
+non-commercial evaluation. See [Third-Party Licenses](THIRD_PARTY_LICENSES.md)
+for file-level details.
+
+Use must also comply with the [Responsible Use Policy](RESPONSIBLE_USE.md), which
+prohibits deceptive impersonation, harassment, unauthorized cloning or use of a
+person's likeness or voice, privacy violations, and presenting EmpaAva as a
+medical or mental-health professional. This summary is not legal advice.
