@@ -9,8 +9,6 @@
 [![3D Avatar](https://img.shields.io/badge/Avatar-3D%20Gaussian%20Splatting-7C3AED?style=flat-square)](#architecture)
 [![License](https://img.shields.io/badge/License-Research--only-lightgrey?style=flat-square)](#license)
 
-[Project Page](https://1114531938.github.io/EmpaAva/) · [Demo](#demo) · [Code](https://github.com/1114531938/EmpaAva_System)
-
 </div>
 
 EmpaAva is an open-source, live, agentic 3D-avatar chatbot for face-to-face
