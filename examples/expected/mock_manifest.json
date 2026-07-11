@@ -1,0 +1,1 @@
+{"schema_version":"1.0","mode":"mock","models":{},"configuration":{"purpose":"UI and API smoke test only"},"inputs":{"audio":"examples/inputs/sample.wav","video":"examples/inputs/sample.mp4"},"outputs":{"video":null},"timing":{"elapsed_seconds":0,"stages":{}},"fallbacks":["mock_mode"],"random_seed":42,"exceptions":[]}

@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "bundles": [
+    {
+      "name": "EmpaAva full runtime assets",
+      "id": "runtime-assets-2026-07-01",
+      "source": "https://github.com/1114531938/EmpaAva_System/releases/tag/runtime-assets-2026-07-01",
+      "version": "runtime-assets-2026-07-01 + patch1",
+      "license": "Mixed: Apache-2.0/MIT/BSD-style/research-only component terms; see THIRD_PARTY_LICENSES.md and licenses shipped beside each component",
+      "disk_gb_download": 40,
+      "disk_gb_installed": 100,
+      "automatic": true,
+      "requires_license_acceptance": true
+    }
+  ],
+  "policy": "Entries without a known license are never downloaded automatically."
+}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -44,9 +45,19 @@ def find_first_value(obj: Any, keys: set[str]) -> str | None:
 
 
 def build_manifest(state) -> dict[str, Any]:
+    extra = state.extra or {}
     return {
+        "schema_version": "1.0",
         "agent_pipeline_version": AGENT_PIPELINE_VERSION,
         "run_id": state.run_id,
+        "models": extra.get("model_versions", {}),
+        "configuration": extra.get("configuration", {}),
+        "inputs": {"audio": state.input_wav, "video": state.input_video},
+        "outputs": {"reply_audio": state.reply_wav, "motion": state.flame_motion_npz, "video": state.output_video, "white_model_video": state.output_white_model_video},
+        "timing": {"elapsed_seconds": extra.get("elapsed_seconds"), "stages": extra.get("stage_timings", {})},
+        "fallbacks": extra.get("fallbacks", []),
+        "random_seed": extra.get("random_seed", int(os.environ.get("EMPAAVA_SEED", "42"))),
+        "exceptions": extra.get("exceptions", [state.error] if state.error else []),
         "input_wav": state.input_wav,
         "input_video": state.input_video,
         "video_frames_dir": state.video_frames_dir,
@@ -69,6 +80,7 @@ def build_manifest(state) -> dict[str, Any]:
         "tts_speaker_id": state.tts_speaker_id,
         "emotivoice_txt": state.emotivoice_txt,
         "reply_wav": state.reply_wav,
+        "preset_reply_audio": (state.extra or {}).get("preset_reply_audio"),
         "deeptalk_npy": state.deeptalk_npy,
         "flame_motion_npz": state.flame_motion_npz,
         "point_cloud_path": state.point_cloud_path,

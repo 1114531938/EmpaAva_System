@@ -4,10 +4,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="${AVATAR_SYSTEM_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 
-REPO="${AVATAR_RUNTIME_REPO:-1114531938/avatar-system-full}"
+REPO="${AVATAR_RUNTIME_REPO:-1114531938/EmpaAva_System}"
 TAG="${AVATAR_RUNTIME_RELEASE_TAG:-runtime-assets-2026-07-01}"
-PREFIX="${AVATAR_RUNTIME_ASSET_PREFIX:-avatar-system-full-runtime-assets}"
-PREFIXES="${AVATAR_RUNTIME_ASSET_PREFIXES:-$PREFIX avatar-system-full-runtime-assets-patch1}"
+PREFIX="${AVATAR_RUNTIME_ASSET_PREFIX:-EmpaAva_System-runtime-assets}"
+PREFIXES="${AVATAR_RUNTIME_ASSET_PREFIXES:-$PREFIX EmpaAva_System-runtime-assets-patch1}"
 DOWNLOAD_DIR="${AVATAR_RUNTIME_DOWNLOAD_DIR:-$ROOT/runtime/release_assets/downloads/$TAG}"
 BASE_URL="${AVATAR_RUNTIME_BASE_URL:-https://github.com/$REPO/releases/download/$TAG}"
 SHA_FILE_NAME="${AVATAR_RUNTIME_SHA_FILE:-sha256sums.patch1.txt}"
@@ -35,7 +35,7 @@ download() {
     return
   fi
   echo "Downloading $url"
-  curl -fL --retry 5 --retry-delay 5 -o "$name" "$url"
+  curl -fL --retry 5 --retry-delay 5 -C - -o "$name" "$url"
 }
 
 if ! download "$SHA_FILE_NAME"; then

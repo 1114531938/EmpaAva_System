@@ -1,0 +1,2 @@
+# Minimal UI/API and environment-check dependencies (Python 3.10+).
+-r apps/web/requirements.txt

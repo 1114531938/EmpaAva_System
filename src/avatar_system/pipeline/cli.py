@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -93,8 +94,17 @@ def main():
 
     save_state(state)
 
+    started_at = time.monotonic()
+    state.extra["configuration"] = config
+    state.extra["random_seed"] = int(os.environ.get("EMPAAVA_SEED", "42"))
+    state.extra["model_versions"] = {
+        "runtime_bundle": os.environ.get("AVATAR_RUNTIME_RELEASE_TAG", "runtime-assets-2026-07-01")
+    }
     orchestrator = Orchestrator(config)
     final_state = orchestrator.run(state, save_state=save_state)
+    final_state.extra["elapsed_seconds"] = round(time.monotonic() - started_at, 3)
+    if final_state.error:
+        final_state.extra.setdefault("exceptions", []).append(final_state.error)
 
     manifest = write_manifest(final_state)
 

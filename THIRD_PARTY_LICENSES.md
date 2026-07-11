@@ -5,6 +5,15 @@ is a practical inventory, not a replacement for the complete upstream license
 files or legal advice. When terms differ, the original license or access
 agreement controls.
 
+## Model-download policy
+
+`models/manifest.json` is the machine-readable downloadable-artifact inventory.
+The runtime bundle contains components under different open-source and
+research-use terms, so downloads require explicit `--accept-licenses`.
+Artifacts with unknown or undocumented licenses are never downloaded
+automatically. Review the license beside every integration and model before
+research, redistribution, or commercial use.
+
 ## Source integrations
 
 | Component | Local license | Summary |
