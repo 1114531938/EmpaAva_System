@@ -1,40 +1,123 @@
+<div align="center">
+
 # EmpaAva
 
-## 项目介绍
+### An Open-source Agentic 3D-Avatar Empathetic Live Chatbot
 
-EmpaAva 是面向共情对话的 agentic 3D Avatar 系统：从语音和可选视频感知用户状态，经回复规划、情感语音、音频驱动 FLAME 动作与 3D Gaussian 渲染生成数字人回复。完整推理仅支持 Linux + NVIDIA CUDA GPU；CPU 不支持完整 Gaussian 渲染。
+[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white)](#installation)
+[![FastAPI](https://img.shields.io/badge/FastAPI-Backend-009688?style=flat-square&logo=fastapi&logoColor=white)](#installation)
+[![3D Avatar](https://img.shields.io/badge/Avatar-3D%20Gaussian%20Splatting-7C3AED?style=flat-square)](#architecture)
+[![License](https://img.shields.io/badge/First--party%20code-Apache--2.0-green?style=flat-square)](#license-and-responsible-use)
 
-![EmpaAva](docs/assets/readme/hero.png)
+</div>
 
-## 在线 Demo / Demo Video / Project Page
+EmpaAva is an open-source, live, agentic 3D-avatar chatbot for face-to-face
+empathetic interaction. It listens to a user, understands their words and
+emotion, plans a supportive response, and delivers it through synchronized
+emotional speech, facial motion, and photorealistic 3D-avatar rendering.
 
-公开链接尚未发布。仓库当前提供可复现的本地 Demo；在线地址、演示视频和项目页确定后将在此更新，避免放置不可验证的占位 URL。
+<p align="center">
+  <img src="docs/assets/readme/hero.png" width="92%" alt="EmpaAva video-call interface with a user and an empathetic 3D digital human">
+</p>
 
-## 系统架构
+<p align="center"><em>EmpaAva turns multimodal user input into a live, embodied empathetic response.</em></p>
+
+## Contents
+
+- [Highlights](#highlights)
+- [News](#news)
+- [Demo](#demo)
+- [Workflow](#workflow)
+- [Architecture](#architecture)
+- [Installation](#installation)
+- [Models and Runtime](#models-and-runtime)
+- [Configuration and Documentation](#configuration-and-documentation)
+- [Acknowledgements](#acknowledgements)
+- [Citation](#citation)
+- [License and Responsible Use](#license-and-responsible-use)
+
+## Highlights
+
+- **Live multimodal interaction.** Browser-based microphone and optional camera
+  input support a natural video-call-like conversation loop.
+- **Tri-Agent Architecture.** PerceptionAgent, ResponseAgent, and RenderAgent
+  separate understanding, empathetic planning, and embodied generation into
+  independently testable stages.
+- **Response Planning.** A structured plan aligns the reply text, emotion,
+  voice, avatar, expression, motion, and background around one empathetic intent.
+- **Embodied 3D responses.** Emotional TTS, audio-driven FLAME motion, and 3D
+  Gaussian rendering produce synchronized avatar videos and interactive assets.
+- **Inspectable and extensible.** Human-readable state, manifests, and modular
+  workers make every stage replaceable and easier to reproduce or ablate.
+
+## News
+
+- **2026-07:** EmpaAva project page, paper, and full system implementation are
+  prepared for public release.
+- **2026-07:** The browser booth supports guest sessions, avatar and background
+  selection, multimodal conversation history, playback, and export.
+- **2026-07:** The complete perception-to-rendering pipeline is available through
+  a unified CLI and local worker services.
+
+## Demo
+
+EmpaAva runs as a video-call-like emotional booth. A user selects a digital
+human, speaks naturally, and receives a rendered avatar response with emotional
+speech and synchronized facial motion. Each conversation turn can be replayed,
+inspected in the 3D viewer, or exported from the session history.
+
+<p align="center">
+  <img src="docs/assets/readme/multiturn-case-study.png" width="96%" alt="Two qualitative multi-turn EmpaAva conversations showing user state, response strategy, speech, and avatar output">
+</p>
+
+<p align="center"><em>Qualitative multi-turn examples for academic stress and emotional invalidation.</em></p>
+
+## Workflow
+
+The browser handles entry, avatar setup, audio/video capture, response playback,
+3D viewing, and conversation export as one continuous interaction.
+
+<p align="center">
+  <img src="docs/assets/readme/workflow.png" width="68%" alt="Eight-step workflow of the EmpaAva browser system">
+</p>
+
+At runtime, each turn follows the same end-to-end path:
 
 ```text
-音频 + 可选视频 → PerceptionAgent → ResponseAgent
-                  → 情感 TTS → DEEPTalk → FLAME/AvaMERG
-                  → CUDA Gaussian Renderer → MP4 / 3D Viewer
+Audio + optional video
+  -> speech recognition and emotion perception
+  -> empathetic response planning
+  -> emotional speech synthesis
+  -> audio-driven facial motion
+  -> FLAME and Gaussian motion merge
+  -> photorealistic 3D-avatar rendering
+  -> browser playback, history, and export
 ```
 
-各阶段使用 JSON 状态与统一 `manifest.json` 交接。详见 [Agent Architecture](docs/AGENT_ARCHITECTURE.md)。
+## Architecture
 
-## 硬件要求
+<p align="center">
+  <img src="docs/assets/readme/tri-agent-architecture.png" width="100%" alt="EmpaAva Tri-Agent Architecture from multimodal perception through response planning to embodied avatar rendering">
+</p>
 
-| 模式 | 硬件 | 说明 |
-| --- | --- | --- |
-| Full | H200 | 明确支持并推荐；显存充足 |
-| Full | A100 40/80GB | 明确支持，需匹配 PyTorch/CUDA 驱动 |
-| Full | RTX 4090 24GB | 明确支持推理；高分辨率/并发时需降低配置 |
-| Full | 其他 NVIDIA GPU | 建议 Compute Capability ≥ 8.0、显存 ≥ 24GB |
-| Mock | CPU 或任意 GPU | 仅 UI/API 冒烟测试，不加载模型，不是 EmpaAva 推理 |
+EmpaAva decomposes empathetic interaction into three cooperating agents:
 
-要求 Ubuntu 20.04/22.04、Python 3.10+、FFmpeg、Git、curl；Full 模式还需要 NVIDIA 驱动/CUDA、Apptainer/Singularity，部分历史 worker 需要 Python 3.8。模型和环境建议预留至少 140GB。
+1. **PerceptionAgent** converts speech, acoustic emotion, optional visual context,
+   and dialogue history into a structured representation of the user state.
+2. **ResponseAgent** reasons about the user's emotion, needs, and context, then
+   produces a reply plan covering content, strategy, delivery, and avatar control.
+3. **RenderAgent** executes the plan with emotional TTS, DEEPTalk motion,
+   FLAME/Gaussian parameter merging, and realistic avatar rendering.
 
-## Quick Start
+The agents communicate through inspectable JSON state rather than opaque model
+interfaces, so perception, planning, speech, motion, and rendering components can
+be tested or replaced independently. See
+[Agent Architecture](docs/AGENT_ARCHITECTURE.md) for the full stage contracts.
 
-以下命令可从全新目录执行，不含作者服务器路径：
+## Installation
+
+For a reproducible UI/API smoke test from a fresh checkout, use the standard
+entry points below:
 
 ```bash
 git clone https://github.com/1114531938/EmpaAva_System.git
@@ -45,76 +128,358 @@ python scripts/check_env.py
 bash scripts/start_demo.sh
 ```
 
-浏览器打开 `http://127.0.0.1:7861`。默认 `EMPAAVA_MODE=mock`，仅验证界面与 API。停止：
+The default `EMPAAVA_MODE=mock` is explicitly limited to UI and API smoke
+testing. It does not load the research models and is not full EmpaAva inference.
+Stop it with `bash scripts/stop_demo.sh`.
 
-```bash
-bash scripts/stop_demo.sh
-```
+### Requirements
 
-## 完整安装
+The complete avatar pipeline is intended for a Linux GPU server. A source-only
+checkout can run the documentation and lightweight web code, but rendering
+requires the separately published runtime assets.
+
+| Requirement | Supported or expected configuration |
+| --- | --- |
+| Operating system | Ubuntu 20.04/22.04 or a compatible Linux distribution |
+| Python | Python 3 for most workers; Python 3.8 for AvaMERG |
+| GPU | NVIDIA H200 and A100 are supported and recommended; RTX 4090 24 GB is supported for inference with reduced resolution/concurrency when necessary |
+| Container runtime | Apptainer or Singularity with NVIDIA GPU support |
+| System tools | Git, Git LFS, curl, build tools, FFmpeg/FFprobe, Python venv support |
+| Storage | Allow substantial space for checkpoints, the Gaussian container, caches, and outputs |
+
+Install the basic Ubuntu packages:
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y git git-lfs curl build-essential ffmpeg zstd python3 python3-dev python3-venv python3-pip
+sudo apt-get install -y \
+  git git-lfs curl build-essential ffmpeg \
+  python3 python3-dev python3-venv python3-pip
 git lfs install
+```
+
+Install the NVIDIA driver, CUDA runtime, and Apptainer separately according to
+your host. Confirm that `nvidia-smi` and `apptainer exec --nv ...` can access the
+GPU before starting the rendering worker. Full 3D Gaussian rendering cannot run
+on CPU. Other NVIDIA GPUs should provide CUDA compute capability 8.0 or newer
+and at least 24 GB VRAM; allow approximately 140 GB for environments, models,
+caches, and outputs.
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/1114531938/EmpaAva_System.git
+cd EmpaAva_System
+```
+
+Set a stable absolute project path and create the local configuration:
+
+```bash
+export AVATAR_SYSTEM_ROOT="$(pwd)"
+export PROJECT_ROOT="$AVATAR_SYSTEM_ROOT"
+cp config/runtime.env.example config/runtime.env
+chmod 600 config/runtime.env
+```
+
+Edit `config/runtime.env` and set at least `AVATAR_SYSTEM_ROOT`, `PROJECT_ROOT`,
+`DEPB_ROOT`, and the configured LLM provider credentials. Never commit this file.
+
+```bash
+set -a
+source config/runtime.env
+set +a
+```
+
+### 2. Restore models and runtime assets
+
+Review the machine-readable model inventory and third-party terms first. It
+records each downloadable bundle's name, source, version, license summary, and
+disk requirements. Models with unknown or undocumented licenses are never
+downloaded automatically.
+
+```bash
+cat models/manifest.json
 bash scripts/download_models.sh --accept-licenses
+```
+
+The standard downloader supports resumable transfers, a configurable cache
+(`EMPAAVA_CACHE_DIR`), checksum verification, and safe repeated execution.
+
+Model checkpoints, avatar point clouds, the Gaussian rendering container, and
+other large runtime files are distributed through the
+[`runtime-assets-2026-07-01`](https://github.com/1114531938/EmpaAva_System/releases/tag/runtime-assets-2026-07-01)
+GitHub Release rather than Git:
+
+```bash
+bash scripts/download_runtime_assets.sh
+```
+
+The script downloads all archive parts, verifies their SHA-256 checksums,
+extracts them into the expected paths, and rebuilds missing Python environments.
+To restore assets without building environments, use:
+
+```bash
+AVATAR_RUNTIME_REBUILD_VENVS=0 bash scripts/download_runtime_assets.sh
+```
+
+### 3. Build or repair the Python environments
+
+```bash
 bash scripts/rebuild_runtime_venvs.sh
-sed -i 's/^EMPAAVA_MODE=.*/EMPAAVA_MODE=full/' .env
+```
+
+The default layout is:
+
+```text
+runtime/cache/venvs/web
+runtime/cache/venvs/perception
+runtime/cache/venvs/deeptalk
+integrations/avamerg/.avamerg38
+integrations/emotivoice/.EmotiVoice
+integrations/gaussian_avatar/.GSavatar_glibc
+```
+
+If Python 3.8 is not on `PATH`, specify both interpreters explicitly:
+
+```bash
+AVATAR_PYTHON3=/usr/bin/python3 \
+AVATAR_PYTHON38=/usr/bin/python3.8 \
+  bash scripts/rebuild_runtime_venvs.sh
+```
+
+### 4. Configure host paths and FFmpeg
+
+The restored runtime normally provides cached FFmpeg binaries. To use the system
+installation instead:
+
+```bash
+export AVATAR_FFMPEG=/usr/bin/ffmpeg
+export AVATAR_FFPROBE=/usr/bin/ffprobe
+export DEPB_FFMPEG=/usr/bin/ffmpeg
+```
+
+If the repository is outside `/scratch`, expose its absolute path to Apptainer:
+
+```bash
+export APPTAINER_FLAGS="--nv -B $AVATAR_SYSTEM_ROOT:$AVATAR_SYSTEM_ROOT"
+```
+
+See [Reproduction Setup](docs/REPRODUCTION_SETUP.md) for the full checkpoint
+inventory and all supported path overrides.
+
+### 5. Verify the installation
+
+Run the consolidated preflight first:
+
+```bash
 python scripts/check_env.py
 ```
 
-须另行安装适配 GPU 的 NVIDIA 驱动、CUDA 和 Apptainer。`check_env.py` 的 FAIL 必须全部解决；WARN 表示可选能力或 mock 模式缺少完整模型。安装脚本可重复运行。pip 失败可重试 `.venv/bin/python -m pip install -r requirements.txt`；缺 FFmpeg 时执行上面的 apt 命令。
-
-## 模型下载
+It reports `PASS`, `WARN`, or `FAIL` for Python, CUDA, GPU access, FFmpeg,
+model directories, configured ports, environment variables, third-party Python
+modules, checkpoints, and write permissions. Resolve every `FAIL` before using
+full mode.
 
 ```bash
-bash scripts/download_models.sh
-bash scripts/download_models.sh --accept-licenses
+bash scripts/avatar.sh --help
+
+test -x runtime/cache/venvs/web/bin/python
+test -x runtime/cache/venvs/perception/bin/python
+test -x runtime/cache/venvs/deeptalk/bin/python
+test -x integrations/avamerg/.avamerg38/bin/python
+test -x integrations/emotivoice/.EmotiVoice/bin/python
+test -x integrations/gaussian_avatar/.GSavatar_glibc/bin/python
+
+test -f integrations/emotivoice/outputs/prompt_tts_open_source_joint/ckpt/g_00140000
+test -f integrations/deeptalk/DEEPTalk/checkpoint/DEEPTalk/DEEPTalk.pth
+test -f integrations/gaussian_avatar/media/306/point_cloud.ply
+test -f integrations/gaussian_avatar/media/306/flame_param.npz
 ```
 
-第一条命令只显示许可阻断。下载支持断点续传、SHA-256 校验、缓存和重复运行。设置 `EMPAAVA_CACHE_DIR=/data/empaava-cache` 可更换缓存。名称、来源、版本、许可证和空间需求见 [models/manifest.json](models/manifest.json)；许可证不明的模型不会自动下载。完整声明见 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)。
+Every `test` command should exit successfully without printing output.
 
-## 启动前端和后端
+### 6. Start the system
+
+The standard managed entry points are:
 
 ```bash
 bash scripts/start_demo.sh
-bash scripts/avatar.sh service web status
 bash scripts/stop_demo.sh
 ```
 
-Full 模式会启动 web 和所需 worker；日志在 `runtime/logs/`。默认 web 端口 7861、worker 8788–8792，均可在 `.env` 修改。详见 [Services and Ports](docs/SERVICES_AND_PORTS.md)。
+They read `.env` and can be run repeatedly. In full mode the existing worker
+service orchestration remains available through `scripts/avatar.sh`.
 
-## 运行一个示例
+```bash
+# Main studio UI
+bash scripts/avatar.sh web
 
-仓库自带无需摄像头的 `examples/inputs/sample.wav` 和 `sample.mp4`：
+# EmpaAva booth UI; local workers start automatically by default
+bash scripts/avatar.sh booth
+```
+
+Then open:
+
+- Studio: <http://localhost:7861/>
+- EmpaAva booth: <http://localhost:7862/>
+
+Use `DEPB_AUTO_START_WORKERS=0` to manage workers separately:
+
+```bash
+bash scripts/avatar.sh worker perception
+bash scripts/avatar.sh worker avamerg
+bash scripts/avatar.sh worker tts
+bash scripts/avatar.sh worker deeptalk
+bash scripts/avatar.sh worker gaussian
+```
+
+Check the services after startup:
+
+```bash
+curl -fsS http://127.0.0.1:7862/
+curl -fsS http://127.0.0.1:8788/health
+curl -fsS http://127.0.0.1:8789/health
+curl -fsS http://127.0.0.1:8790/health
+curl -fsS http://127.0.0.1:8791/health
+curl -fsS http://127.0.0.1:8792/health
+```
+
+### 7. Run a CLI smoke test
+
+The repository includes a one-second sample audio/video pair, so reviewers do
+not need a camera or microphone:
 
 ```bash
 bash scripts/run_example.sh
 ```
 
-Mock 预期输出为 `runtime/outputs/example/manifest.json`，参考 [mock_manifest.json](examples/expected/mock_manifest.json)，不产生数字人视频。Full 模式会将同一输入送入完整流水线，最终 MP4 和所有产物路径记录在 run manifest 中。
-
-## API 使用
+In mock mode the expected result is
+`runtime/outputs/example/manifest.json`, matching
+`examples/expected/mock_manifest.json`; this is only a UI/API smoke test. In
+full mode the same command sends `examples/inputs/sample.wav` and
+`examples/inputs/sample.mp4` through the complete pipeline.
 
 ```bash
-curl -fsS http://127.0.0.1:7861/
-curl -fsS http://127.0.0.1:7861/openapi.json -o /tmp/empaava-openapi.json
+PYTHONPATH=src runtime/cache/venvs/deeptalk/bin/python \
+  -m avatar_system.pipeline.cli \
+  --input_wav /path/to/input.wav \
+  --input_video /path/to/optional_user_video.webm \
+  --avatar_id 306 \
+  --tts_speaker_id 6224 \
+  --background study \
+  --config src/avatar_system/pipeline_config.yaml
 ```
 
-交互式文档位于 `http://127.0.0.1:7861/docs`。上传与会话接口以 OpenAPI 页面中的当前 schema 为准。
+Outputs are written to `runtime/outputs/<run_id>/`, including stage state,
+perception results, the reply plan, generated audio and motion, viewer assets,
+and the final avatar video. Every run also writes a unified `manifest.json`
+containing model versions, configuration, input and output files, elapsed time,
+stage timing data, fallbacks, random seed, and exception information.
 
-## Run manifest
+Common failures are usually caused by missing release assets, incompatible CUDA
+wheels, incorrect Apptainer bind paths, or environment variables that still
+point to the original machine. The troubleshooting checklist in
+[Reproduction Setup](docs/REPRODUCTION_SETUP.md#10-troubleshooting) covers each
+worker and required checkpoint.
 
-每次完整运行写出统一 `manifest.json`，包含 schema/pipeline 版本、模型版本、配置、输入输出、总耗时与分阶段耗时、fallback、随机种子和异常信息，同时保留原有阶段产物字段，便于复现和审计。
+## Models and Runtime
 
-## 常见错误
+EmpaAva connects specialized open-source models through local workers instead of
+treating the system as one end-to-end model.
 
-- `GPU/CUDA FAIL`：Full 模式必须能运行 `nvidia-smi`；CPU 只能使用 mock。
-- `checkpoint ... missing`：阅读许可证后运行 `bash scripts/download_models.sh --accept-licenses`。
-- 端口占用：修改 `.env` 中 `PORT`，或执行 `bash scripts/stop_demo.sh`。
-- `No module named ...`：重跑 `bash scripts/setup.sh`；Full worker 再跑 `bash scripts/rebuild_runtime_venvs.sh`。
-- Apptainer 看不到 GPU：先验证 `apptainer exec --nv <image> nvidia-smi` 并检查宿主机驱动。
+| Stage | Default model or tool | Main output |
+| --- | --- | --- |
+| Speech recognition | Whisper (`small` by default) | Transcript and ASR metadata |
+| Speech emotion recognition | FunASR `emotion2vec_plus_seed` | Normalized acoustic emotion |
+| Empathetic reasoning | AvaMERG / configured LLM backend | Reply content and response plan |
+| Emotional speech | EmotiVoice | Synthesized response WAV |
+| Facial motion | DEEPTalk | Frame-level FLAME motion |
+| Motion integration | FLAME / Gaussian parameter merge | Render-ready motion sequence |
+| Avatar generation | GaussianAvatar renderer | MP4 and interactive viewer assets |
 
-## 许可证和第三方声明
+Default local service ports are:
 
-第一方代码采用 [Apache-2.0](LICENSE)。第三方代码、模型和数据适用各自原始条款，详见 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)、[NOTICE](NOTICE) 和各 `integrations/*/LICENSE*`。使用前亦请阅读 [RESPONSIBLE_USE.md](RESPONSIBLE_USE.md)。
+| Port | Service |
+| ---: | --- |
+| 7861 | Main FastAPI studio |
+| 7862 | EmpaAva booth |
+| 8788 | EmotiVoice worker |
+| 8789 | AvaMERG worker |
+| 8790 | DEEPTalk worker |
+| 8791 | Perception worker |
+| 8792 | Gaussian render worker |
+
+For health checks, worker contracts, and port overrides, see
+[Services and Ports](docs/SERVICES_AND_PORTS.md).
+
+## Configuration and Documentation
+
+The main pipeline configuration is
+[`src/avatar_system/pipeline_config.yaml`](src/avatar_system/pipeline_config.yaml).
+Environment overrides and runtime path examples are documented in
+[`config/runtime.env.example`](config/runtime.env.example).
+
+| Guide | Purpose |
+| --- | --- |
+| [Project Structure](docs/PROJECT_STRUCTURE.md) | Repository layout and component ownership |
+| [Agent Architecture](docs/AGENT_ARCHITECTURE.md) | Agent responsibilities, state, and stage contracts |
+| [Reproduction Setup](docs/REPRODUCTION_SETUP.md) | Environments, checkpoints, assets, and host setup |
+| [Services and Ports](docs/SERVICES_AND_PORTS.md) | Worker processes, URLs, and health checks |
+| [Aliyun Deployment](docs/DEPLOY_ALIYUN.md) | Server deployment and operational notes |
+
+Runtime caches, checkpoints, containers, virtual environments, and generated
+outputs belong under `runtime/` or integration-specific ignored directories and
+should not be committed.
+
+## Acknowledgements
+
+EmpaAva is built on the contributions of the open-source research community. We
+thank the authors and maintainers of
+[AvaMERG](https://github.com/WalkerMitty/AvaMERG),
+[EmotiVoice](https://github.com/netease-youdao/EmotiVoice),
+[DEEPTalk](https://github.com/whwjdqls/DEEPTalk),
+[GaussianAvatars](https://github.com/ShenhanQian/GaussianAvatars),
+[VHAP](https://github.com/ShenhanQian/VHAP),
+[Whisper](https://github.com/openai/whisper),
+[FunASR](https://github.com/modelscope/FunASR), FLAME, FastAPI, and ffmpeg.
+Please also cite the upstream models and datasets used in your experiments.
+
+## Citation
+
+If you find EmpaAva useful in your research, please cite:
+
+```bibtex
+@misc{yang2026empaava,
+  title        = {EmpaAva: An Open-source Agentic 3D-Avatar Empathetic Live Chatbot},
+  author       = {Yang, Jie and Xu, Wenhao and Lin, Shuhui and Fei, Hao},
+  year         = {2026},
+  howpublished = {\url{https://github.com/1114531938/EmpaAva_System}}
+}
+```
+
+## License and Responsible Use
+
+EmpaAva-authored source code is licensed under the **Apache License 2.0**; see
+[LICENSE](LICENSE) and [NOTICE](NOTICE). This license does **not** relicense the
+third-party integrations, model weights, datasets, avatars, voices, or other
+assets included in or downloaded by the project.
+
+| Component or asset | Governing terms |
+| --- | --- |
+| AvaMERG and DEEPTalk source | MIT License |
+| EmotiVoice source and service | Apache-2.0 plus the bundled EmotiVoice User Agreement |
+| GaussianAvatars and VHAP | CC BY-NC-SA 4.0; non-commercial restrictions apply |
+| Gaussian Splatting code | Inria/MPII research and evaluation license; no commercial use without permission |
+| ImageBind integration | CC BY-NC-SA 4.0 |
+| Model checkpoints and datasets | Their respective upstream model cards, dataset licenses, and access agreements |
+| Avatar identities, point clouds, images, and videos | Research-demo use only unless an asset-specific written grant says otherwise; no identity or publicity rights are granted |
+| EmotiVoice speakers and generated speech | EmotiVoice Apache-2.0 license and User Agreement; users remain responsible for voice, content, and output rights |
+
+The complete runnable system must satisfy **all** applicable terms; the most
+restrictive component or asset may therefore limit a deployment to research and
+non-commercial evaluation. See [Third-Party Licenses](THIRD_PARTY_LICENSES.md)
+for file-level details.
+
+Use must also comply with the [Responsible Use Policy](RESPONSIBLE_USE.md), which
+prohibits deceptive impersonation, harassment, unauthorized cloning or use of a
+person's likeness or voice, privacy violations, and presenting EmpaAva as a
+medical or mental-health professional. This summary is not legal advice.
